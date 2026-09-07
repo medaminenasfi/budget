@@ -90,21 +90,26 @@ Instead of 8+ near-duplicate tables, use a shared schema:
 |---|---|---|
 | id | INTEGER PK | |
 | category_id | FK → categories | |
-| amount | REAL | budget or goal amount |
+| amount_minor | INTEGER | budget or goal in minor units (millimes for TND, cents for EUR/USD) |
 | currency | TEXT | TND / EUR / USD |
+| period_month | INTEGER | 1-12; used for monthly uniqueness |
+| period_year | INTEGER | Four-digit year |
 | period_start | DATE | |
 | period_end | DATE | nullable (savings/debt may be open-ended) |
+
+Constraint: `UNIQUE(category_id, period_month, period_year)`.
 
 ### `transactions`
 | Field | Type | Notes |
 |---|---|---|
 | id | INTEGER PK | |
 | category_id | FK → categories | |
+| trip_id | FK → trips | nullable; used for travel transactions |
 | title | TEXT | |
 | subcategory | TEXT | e.g. Hotel, Groceries |
-| amount | REAL | in original currency |
+| amount_minor | INTEGER | in original currency's minor units |
 | currency | TEXT | TND / EUR / USD |
-| converted_amount | REAL | amount converted to base currency (TND) at entry time |
+| converted_amount_minor | INTEGER | converted to TND minor units at entry time |
 | exchange_rate | REAL | rate used, stored for historical accuracy |
 | date | DATE | |
 | is_purchased | BOOLEAN | used for Special Purchases |
@@ -112,6 +117,18 @@ Instead of 8+ near-duplicate tables, use a shared schema:
 | recurring_rule_id | FK → recurring_rules | nullable |
 | receipt_photo_path | TEXT | nullable, local file path |
 | notes | TEXT | nullable |
+
+For Special Purchases, only transactions/items marked `is_purchased = true` count toward
+the spent total and reduce the remaining budget.
+
+### `trips`
+| Field | Type | Notes |
+|---|---|---|
+| id | INTEGER PK | |
+| destination | TEXT | |
+| start_date | DATE | |
+| end_date | DATE | |
+| budget_id | FK → budgets | |
 
 ### `recurring_rules` *(new — for subscriptions/rent)*
 | Field | Type | Notes |
@@ -152,6 +169,7 @@ Instead of 8+ near-duplicate tables, use a shared schema:
 ## 5. Multi-Currency Logic (TND / EUR / USD)
 
 - **Base currency = TND.** All summaries, totals, and dashboard cards are shown in TND by default.
+- Money is stored as integer minor units: millimes for TND and cents for EUR/USD.
 - Every transaction stores **both** its original amount+currency **and** its converted-to-TND amount, using the exchange rate at the time of entry — this keeps historical accuracy even if rates change later.
 - **Rate source options:**
   - *Offline/manual:* user sets/edits rates in a Settings screen (simplest, no internet dependency — good for MVP).
@@ -211,7 +229,7 @@ Instead of 8+ near-duplicate tables, use a shared schema:
 
 | Feature | How it works |
 |---|---|
-| **Recurring expenses** | `recurring_rules` table stores frequency + next due date; a background check on app open inserts a new `transactions` row if `next_due_date` has passed, then advances the date. |
+| **Recurring expenses** | `recurring_rules` table stores frequency + next due date; an app-open check inserts a new `transactions` row if `next_due_date` has passed, then advances the date. True background scheduling is deferred to a later phase. |
 | **Multi-currency** | See §5 — stored per-transaction with locked-in rate; base totals always in TND. |
 | **Localization (AR/FR/EN)** | `.arb` files per language; `intl_utils` or `flutter gen-l10n` to generate code; RTL layout support for Arabic. |
 | **Receipt photos** | `image_picker` captures/selects image → saved to app's local documents dir → path stored in `transactions.receipt_photo_path`. |
@@ -226,11 +244,12 @@ Instead of 8+ near-duplicate tables, use a shared schema:
 ## 8. MVP & Phased Roadmap
 
 ### ✅ Phase 1 — MVP Core (must-have to call it a working app)
-- Database layer (Drift/sqflite) with `categories`, `budgets`, `transactions` tables
+- Database layer with Drift and `categories`, `budgets`, `trips`, `transactions` tables
 - Home dashboard with 4 original category summary cards (TND only)
 - Monthly Expenses screen: full CRUD, remaining budget calculation
 - Basic add/edit/delete transaction forms
 - Single currency (TND) only — no conversion yet
+- Store all monetary values as integer minor units; use the normalized schema from this document
 
 ### 🔁 Phase 2 — Replicate Core Pattern
 - Special Purchases screen (purchased toggle logic)
