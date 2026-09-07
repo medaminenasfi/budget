@@ -1,9 +1,6 @@
-import 'dart:io';
-
 import 'package:drift/drift.dart';
-import 'package:drift/native.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
+
+import 'database_connection.dart';
 
 part 'database.g.dart';
 
@@ -17,7 +14,7 @@ class Categories extends Table {
 
 @TableIndex(
   name: 'budget_period_unique',
-  columns: {#categoryId, #periodMonth, #periodYear},
+  columns: {#categoryId, #periodMonth, #periodYear, #scopeId},
   unique: true,
 )
 class Budgets extends Table {
@@ -27,6 +24,7 @@ class Budgets extends Table {
   TextColumn get currency => text().withDefault(const Constant('TND'))();
   IntColumn get periodMonth => integer()();
   IntColumn get periodYear => integer()();
+  IntColumn get scopeId => integer().withDefault(const Constant(0))();
   DateTimeColumn get periodStart => dateTime()();
   DateTimeColumn get periodEnd => dateTime().nullable()();
 }
@@ -56,56 +54,111 @@ class BudgetTransactions extends Table {
   DateTimeColumn get date => dateTime()();
   BoolColumn get isPurchased => boolean().withDefault(const Constant(false))();
   BoolColumn get isRecurring => boolean().withDefault(const Constant(false))();
+  TextColumn get receiptPhotoPath => text().nullable()();
   TextColumn get notes => text().nullable()();
 }
 
-@DriftDatabase(tables: [Categories, Budgets, Trips, BudgetTransactions])
-class AppDatabase extends _$AppDatabase {
-  AppDatabase() : super(_openConnection());
-
-  @override
-  int get schemaVersion => 1;
-
-  Future<void> seedCategories() async {
-    if (await select(categories).get().then((rows) => rows.isNotEmpty)) {
-      return;
-    }
-
-    await batch((batch) {
-      batch.insertAll(categories, [
-        CategoriesCompanion.insert(
-          type: 'monthly',
-          name: 'Monthly Expenses',
-          icon: 'calendar_month',
-          colorValue: 0xFFEF8354,
-        ),
-        CategoriesCompanion.insert(
-          type: 'special',
-          name: 'Special Purchases',
-          icon: 'shopping_bag',
-          colorValue: 0xFF5B8E7D,
-        ),
-        CategoriesCompanion.insert(
-          type: 'travel',
-          name: 'Travel',
-          icon: 'flight_takeoff',
-          colorValue: 0xFF3D6D9C,
-        ),
-        CategoriesCompanion.insert(
-          type: 'savings',
-          name: 'Savings',
-          icon: 'savings',
-          colorValue: 0xFFB38B59,
-        ),
-      ]);
-    });
-  }
+class ExchangeRates extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get baseCurrency => text().withDefault(const Constant('TND'))();
+  TextColumn get targetCurrency => text()();
+  RealColumn get rate => real()();
+  DateTimeColumn get updatedAt => dateTime()();
 }
 
-LazyDatabase _openConnection() {
-  return LazyDatabase(() async {
-    final directory = await getApplicationDocumentsDirectory();
-    final file = File(p.join(directory.path, 'smart_budget_manager.sqlite'));
-    return NativeDatabase.createInBackground(file);
-  });
+class Debts extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get personName => text()();
+  TextColumn get direction => text()();
+  IntColumn get amountMinor => integer()();
+  TextColumn get currency => text().withDefault(const Constant('TND'))();
+  IntColumn get convertedAmountMinor => integer()();
+  RealColumn get exchangeRate => real().withDefault(const Constant(1.0))();
+  DateTimeColumn get dateCreated => dateTime()();
+  DateTimeColumn get dueDate => dateTime().nullable()();
+  BoolColumn get settled => boolean().withDefault(const Constant(false))();
+  TextColumn get notes => text().nullable()();
+}
+
+class RecurringRules extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get title => text()();
+  IntColumn get categoryId => integer().references(Categories, #id)();
+  TextColumn get subcategory => text().nullable()();
+  IntColumn get amountMinor => integer()();
+  TextColumn get currency => text().withDefault(const Constant('TND'))();
+  RealColumn get exchangeRate => real().withDefault(const Constant(1.0))();
+  TextColumn get frequency => text()();
+  DateTimeColumn get nextDueDate => dateTime()();
+  BoolColumn get active => boolean().withDefault(const Constant(true))();
+}
+
+@DriftDatabase(
+  tables: [
+    Categories,
+    Budgets,
+    Trips,
+    BudgetTransactions,
+    ExchangeRates,
+    Debts,
+    RecurringRules,
+  ],
+)
+class AppDatabase extends _$AppDatabase {
+  AppDatabase() : super(openDatabaseConnection());
+
+  @override
+  int get schemaVersion => 5;
+
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+        onCreate: (m) => m.createAll(),
+        onUpgrade: (m, from, to) async {
+          if (from < 2) {
+            await m.addColumn(budgets, budgets.scopeId);
+            await customStatement('DROP INDEX IF EXISTS budget_period_unique');
+            await customStatement(
+              'CREATE UNIQUE INDEX budget_period_unique '
+              'ON budgets (category_id, period_month, period_year, scope_id)',
+            );
+          }
+          if (from < 3) {
+            await m.createTable(exchangeRates);
+            await m.createTable(debts);
+          }
+          if (from < 4) {
+            await m.createTable(recurringRules);
+          }
+          if (from < 5) {
+            await m.addColumn(
+                budgetTransactions, budgetTransactions.receiptPhotoPath);
+          }
+        },
+      );
+
+  Future<void> seedCategories() async {
+    const definitions = [
+      ('monthly', 'Monthly Expenses', 'calendar_month', 0xFFEF8354),
+      ('special', 'Special Purchases', 'shopping_bag', 0xFF5B8E7D),
+      ('travel', 'Travel', 'flight_takeoff', 0xFF3D6D9C),
+      ('savings', 'Savings', 'savings', 0xFFB38B59),
+      ('debt', 'Debt Tracker', 'account_balance', 0xFF9B5DE5),
+    ];
+    for (final definition in definitions) {
+      final exists = await (select(categories)
+            ..where((category) => category.type.equals(definition.$1))
+            ..limit(1))
+          .get();
+      if (exists.isEmpty) {
+        await into(categories).insert(
+          CategoriesCompanion.insert(
+            type: definition.$1,
+            name: definition.$2,
+            icon: definition.$3,
+            colorValue: definition.$4,
+          ),
+        );
+      }
+    }
+  }
 }
