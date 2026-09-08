@@ -3153,6 +3153,690 @@ class RecurringRulesCompanion extends UpdateCompanion<RecurringRule> {
   }
 }
 
+class $UserProfilesTable extends UserProfiles
+    with TableInfo<$UserProfilesTable, UserProfile> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $UserProfilesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+      'id', aliasedName, false,
+      hasAutoIncrement: true,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('PRIMARY KEY AUTOINCREMENT'));
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+      'name', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _emailMeta = const VerificationMeta('email');
+  @override
+  late final GeneratedColumn<String> email = GeneratedColumn<String>(
+      'email', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _passwordHashMeta =
+      const VerificationMeta('passwordHash');
+  @override
+  late final GeneratedColumn<String> passwordHash = GeneratedColumn<String>(
+      'password_hash', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _regionMeta = const VerificationMeta('region');
+  @override
+  late final GeneratedColumn<String> region = GeneratedColumn<String>(
+      'region', aliasedName, false,
+      type: DriftSqlType.string,
+      requiredDuringInsert: false,
+      defaultValue: const Constant('Tunisia'));
+  static const VerificationMeta _avatarPathMeta =
+      const VerificationMeta('avatarPath');
+  @override
+  late final GeneratedColumn<String> avatarPath = GeneratedColumn<String>(
+      'avatar_path', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _isGoogleAccountMeta =
+      const VerificationMeta('isGoogleAccount');
+  @override
+  late final GeneratedColumn<bool> isGoogleAccount = GeneratedColumn<bool>(
+      'is_google_account', aliasedName, false,
+      type: DriftSqlType.bool,
+      requiredDuringInsert: false,
+      defaultConstraints: GeneratedColumn.constraintIsAlways(
+          'CHECK ("is_google_account" IN (0, 1))'),
+      defaultValue: const Constant(false));
+  static const VerificationMeta _googleIdMeta =
+      const VerificationMeta('googleId');
+  @override
+  late final GeneratedColumn<String> googleId = GeneratedColumn<String>(
+      'google_id', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _createdAtMeta =
+      const VerificationMeta('createdAt');
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+      'created_at', aliasedName, false,
+      type: DriftSqlType.dateTime, requiredDuringInsert: true);
+  @override
+  List<GeneratedColumn> get $columns => [
+        id,
+        name,
+        email,
+        passwordHash,
+        region,
+        avatarPath,
+        isGoogleAccount,
+        googleId,
+        createdAt
+      ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'user_profiles';
+  @override
+  VerificationContext validateIntegrity(Insertable<UserProfile> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+          _nameMeta, name.isAcceptableOrUnknown(data['name']!, _nameMeta));
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('email')) {
+      context.handle(
+          _emailMeta, email.isAcceptableOrUnknown(data['email']!, _emailMeta));
+    } else if (isInserting) {
+      context.missing(_emailMeta);
+    }
+    if (data.containsKey('password_hash')) {
+      context.handle(
+          _passwordHashMeta,
+          passwordHash.isAcceptableOrUnknown(
+              data['password_hash']!, _passwordHashMeta));
+    }
+    if (data.containsKey('region')) {
+      context.handle(_regionMeta,
+          region.isAcceptableOrUnknown(data['region']!, _regionMeta));
+    }
+    if (data.containsKey('avatar_path')) {
+      context.handle(
+          _avatarPathMeta,
+          avatarPath.isAcceptableOrUnknown(
+              data['avatar_path']!, _avatarPathMeta));
+    }
+    if (data.containsKey('is_google_account')) {
+      context.handle(
+          _isGoogleAccountMeta,
+          isGoogleAccount.isAcceptableOrUnknown(
+              data['is_google_account']!, _isGoogleAccountMeta));
+    }
+    if (data.containsKey('google_id')) {
+      context.handle(_googleIdMeta,
+          googleId.isAcceptableOrUnknown(data['google_id']!, _googleIdMeta));
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(_createdAtMeta,
+          createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta));
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  UserProfile map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return UserProfile(
+      id: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}id'])!,
+      name: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}name'])!,
+      email: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}email'])!,
+      passwordHash: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}password_hash']),
+      region: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}region'])!,
+      avatarPath: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}avatar_path']),
+      isGoogleAccount: attachedDatabase.typeMapping.read(
+          DriftSqlType.bool, data['${effectivePrefix}is_google_account'])!,
+      googleId: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}google_id']),
+      createdAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}created_at'])!,
+    );
+  }
+
+  @override
+  $UserProfilesTable createAlias(String alias) {
+    return $UserProfilesTable(attachedDatabase, alias);
+  }
+}
+
+class UserProfile extends DataClass implements Insertable<UserProfile> {
+  final int id;
+  final String name;
+  final String email;
+  final String? passwordHash;
+  final String region;
+  final String? avatarPath;
+  final bool isGoogleAccount;
+  final String? googleId;
+  final DateTime createdAt;
+  const UserProfile(
+      {required this.id,
+      required this.name,
+      required this.email,
+      this.passwordHash,
+      required this.region,
+      this.avatarPath,
+      required this.isGoogleAccount,
+      this.googleId,
+      required this.createdAt});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['name'] = Variable<String>(name);
+    map['email'] = Variable<String>(email);
+    if (!nullToAbsent || passwordHash != null) {
+      map['password_hash'] = Variable<String>(passwordHash);
+    }
+    map['region'] = Variable<String>(region);
+    if (!nullToAbsent || avatarPath != null) {
+      map['avatar_path'] = Variable<String>(avatarPath);
+    }
+    map['is_google_account'] = Variable<bool>(isGoogleAccount);
+    if (!nullToAbsent || googleId != null) {
+      map['google_id'] = Variable<String>(googleId);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  UserProfilesCompanion toCompanion(bool nullToAbsent) {
+    return UserProfilesCompanion(
+      id: Value(id),
+      name: Value(name),
+      email: Value(email),
+      passwordHash: passwordHash == null && nullToAbsent
+          ? const Value.absent()
+          : Value(passwordHash),
+      region: Value(region),
+      avatarPath: avatarPath == null && nullToAbsent
+          ? const Value.absent()
+          : Value(avatarPath),
+      isGoogleAccount: Value(isGoogleAccount),
+      googleId: googleId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(googleId),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory UserProfile.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return UserProfile(
+      id: serializer.fromJson<int>(json['id']),
+      name: serializer.fromJson<String>(json['name']),
+      email: serializer.fromJson<String>(json['email']),
+      passwordHash: serializer.fromJson<String?>(json['passwordHash']),
+      region: serializer.fromJson<String>(json['region']),
+      avatarPath: serializer.fromJson<String?>(json['avatarPath']),
+      isGoogleAccount: serializer.fromJson<bool>(json['isGoogleAccount']),
+      googleId: serializer.fromJson<String?>(json['googleId']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'name': serializer.toJson<String>(name),
+      'email': serializer.toJson<String>(email),
+      'passwordHash': serializer.toJson<String?>(passwordHash),
+      'region': serializer.toJson<String>(region),
+      'avatarPath': serializer.toJson<String?>(avatarPath),
+      'isGoogleAccount': serializer.toJson<bool>(isGoogleAccount),
+      'googleId': serializer.toJson<String?>(googleId),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  UserProfile copyWith(
+          {int? id,
+          String? name,
+          String? email,
+          Value<String?> passwordHash = const Value.absent(),
+          String? region,
+          Value<String?> avatarPath = const Value.absent(),
+          bool? isGoogleAccount,
+          Value<String?> googleId = const Value.absent(),
+          DateTime? createdAt}) =>
+      UserProfile(
+        id: id ?? this.id,
+        name: name ?? this.name,
+        email: email ?? this.email,
+        passwordHash:
+            passwordHash.present ? passwordHash.value : this.passwordHash,
+        region: region ?? this.region,
+        avatarPath: avatarPath.present ? avatarPath.value : this.avatarPath,
+        isGoogleAccount: isGoogleAccount ?? this.isGoogleAccount,
+        googleId: googleId.present ? googleId.value : this.googleId,
+        createdAt: createdAt ?? this.createdAt,
+      );
+  UserProfile copyWithCompanion(UserProfilesCompanion data) {
+    return UserProfile(
+      id: data.id.present ? data.id.value : this.id,
+      name: data.name.present ? data.name.value : this.name,
+      email: data.email.present ? data.email.value : this.email,
+      passwordHash: data.passwordHash.present
+          ? data.passwordHash.value
+          : this.passwordHash,
+      region: data.region.present ? data.region.value : this.region,
+      avatarPath:
+          data.avatarPath.present ? data.avatarPath.value : this.avatarPath,
+      isGoogleAccount: data.isGoogleAccount.present
+          ? data.isGoogleAccount.value
+          : this.isGoogleAccount,
+      googleId: data.googleId.present ? data.googleId.value : this.googleId,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('UserProfile(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('email: $email, ')
+          ..write('passwordHash: $passwordHash, ')
+          ..write('region: $region, ')
+          ..write('avatarPath: $avatarPath, ')
+          ..write('isGoogleAccount: $isGoogleAccount, ')
+          ..write('googleId: $googleId, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, name, email, passwordHash, region,
+      avatarPath, isGoogleAccount, googleId, createdAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is UserProfile &&
+          other.id == this.id &&
+          other.name == this.name &&
+          other.email == this.email &&
+          other.passwordHash == this.passwordHash &&
+          other.region == this.region &&
+          other.avatarPath == this.avatarPath &&
+          other.isGoogleAccount == this.isGoogleAccount &&
+          other.googleId == this.googleId &&
+          other.createdAt == this.createdAt);
+}
+
+class UserProfilesCompanion extends UpdateCompanion<UserProfile> {
+  final Value<int> id;
+  final Value<String> name;
+  final Value<String> email;
+  final Value<String?> passwordHash;
+  final Value<String> region;
+  final Value<String?> avatarPath;
+  final Value<bool> isGoogleAccount;
+  final Value<String?> googleId;
+  final Value<DateTime> createdAt;
+  const UserProfilesCompanion({
+    this.id = const Value.absent(),
+    this.name = const Value.absent(),
+    this.email = const Value.absent(),
+    this.passwordHash = const Value.absent(),
+    this.region = const Value.absent(),
+    this.avatarPath = const Value.absent(),
+    this.isGoogleAccount = const Value.absent(),
+    this.googleId = const Value.absent(),
+    this.createdAt = const Value.absent(),
+  });
+  UserProfilesCompanion.insert({
+    this.id = const Value.absent(),
+    required String name,
+    required String email,
+    this.passwordHash = const Value.absent(),
+    this.region = const Value.absent(),
+    this.avatarPath = const Value.absent(),
+    this.isGoogleAccount = const Value.absent(),
+    this.googleId = const Value.absent(),
+    required DateTime createdAt,
+  })  : name = Value(name),
+        email = Value(email),
+        createdAt = Value(createdAt);
+  static Insertable<UserProfile> custom({
+    Expression<int>? id,
+    Expression<String>? name,
+    Expression<String>? email,
+    Expression<String>? passwordHash,
+    Expression<String>? region,
+    Expression<String>? avatarPath,
+    Expression<bool>? isGoogleAccount,
+    Expression<String>? googleId,
+    Expression<DateTime>? createdAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (name != null) 'name': name,
+      if (email != null) 'email': email,
+      if (passwordHash != null) 'password_hash': passwordHash,
+      if (region != null) 'region': region,
+      if (avatarPath != null) 'avatar_path': avatarPath,
+      if (isGoogleAccount != null) 'is_google_account': isGoogleAccount,
+      if (googleId != null) 'google_id': googleId,
+      if (createdAt != null) 'created_at': createdAt,
+    });
+  }
+
+  UserProfilesCompanion copyWith(
+      {Value<int>? id,
+      Value<String>? name,
+      Value<String>? email,
+      Value<String?>? passwordHash,
+      Value<String>? region,
+      Value<String?>? avatarPath,
+      Value<bool>? isGoogleAccount,
+      Value<String?>? googleId,
+      Value<DateTime>? createdAt}) {
+    return UserProfilesCompanion(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      email: email ?? this.email,
+      passwordHash: passwordHash ?? this.passwordHash,
+      region: region ?? this.region,
+      avatarPath: avatarPath ?? this.avatarPath,
+      isGoogleAccount: isGoogleAccount ?? this.isGoogleAccount,
+      googleId: googleId ?? this.googleId,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (email.present) {
+      map['email'] = Variable<String>(email.value);
+    }
+    if (passwordHash.present) {
+      map['password_hash'] = Variable<String>(passwordHash.value);
+    }
+    if (region.present) {
+      map['region'] = Variable<String>(region.value);
+    }
+    if (avatarPath.present) {
+      map['avatar_path'] = Variable<String>(avatarPath.value);
+    }
+    if (isGoogleAccount.present) {
+      map['is_google_account'] = Variable<bool>(isGoogleAccount.value);
+    }
+    if (googleId.present) {
+      map['google_id'] = Variable<String>(googleId.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('UserProfilesCompanion(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('email: $email, ')
+          ..write('passwordHash: $passwordHash, ')
+          ..write('region: $region, ')
+          ..write('avatarPath: $avatarPath, ')
+          ..write('isGoogleAccount: $isGoogleAccount, ')
+          ..write('googleId: $googleId, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $AppSettingsTable extends AppSettings
+    with TableInfo<$AppSettingsTable, AppSetting> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $AppSettingsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+      'id', aliasedName, false,
+      hasAutoIncrement: true,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('PRIMARY KEY AUTOINCREMENT'));
+  static const VerificationMeta _keyMeta = const VerificationMeta('key');
+  @override
+  late final GeneratedColumn<String> key = GeneratedColumn<String>(
+      'key', aliasedName, false,
+      type: DriftSqlType.string,
+      requiredDuringInsert: true,
+      defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'));
+  static const VerificationMeta _valueMeta = const VerificationMeta('value');
+  @override
+  late final GeneratedColumn<String> value = GeneratedColumn<String>(
+      'value', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  @override
+  List<GeneratedColumn> get $columns => [id, key, value];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'app_settings';
+  @override
+  VerificationContext validateIntegrity(Insertable<AppSetting> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('key')) {
+      context.handle(
+          _keyMeta, key.isAcceptableOrUnknown(data['key']!, _keyMeta));
+    } else if (isInserting) {
+      context.missing(_keyMeta);
+    }
+    if (data.containsKey('value')) {
+      context.handle(
+          _valueMeta, value.isAcceptableOrUnknown(data['value']!, _valueMeta));
+    } else if (isInserting) {
+      context.missing(_valueMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  AppSetting map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return AppSetting(
+      id: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}id'])!,
+      key: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}key'])!,
+      value: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}value'])!,
+    );
+  }
+
+  @override
+  $AppSettingsTable createAlias(String alias) {
+    return $AppSettingsTable(attachedDatabase, alias);
+  }
+}
+
+class AppSetting extends DataClass implements Insertable<AppSetting> {
+  final int id;
+  final String key;
+  final String value;
+  const AppSetting({required this.id, required this.key, required this.value});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['key'] = Variable<String>(key);
+    map['value'] = Variable<String>(value);
+    return map;
+  }
+
+  AppSettingsCompanion toCompanion(bool nullToAbsent) {
+    return AppSettingsCompanion(
+      id: Value(id),
+      key: Value(key),
+      value: Value(value),
+    );
+  }
+
+  factory AppSetting.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return AppSetting(
+      id: serializer.fromJson<int>(json['id']),
+      key: serializer.fromJson<String>(json['key']),
+      value: serializer.fromJson<String>(json['value']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'key': serializer.toJson<String>(key),
+      'value': serializer.toJson<String>(value),
+    };
+  }
+
+  AppSetting copyWith({int? id, String? key, String? value}) => AppSetting(
+        id: id ?? this.id,
+        key: key ?? this.key,
+        value: value ?? this.value,
+      );
+  AppSetting copyWithCompanion(AppSettingsCompanion data) {
+    return AppSetting(
+      id: data.id.present ? data.id.value : this.id,
+      key: data.key.present ? data.key.value : this.key,
+      value: data.value.present ? data.value.value : this.value,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('AppSetting(')
+          ..write('id: $id, ')
+          ..write('key: $key, ')
+          ..write('value: $value')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, key, value);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is AppSetting &&
+          other.id == this.id &&
+          other.key == this.key &&
+          other.value == this.value);
+}
+
+class AppSettingsCompanion extends UpdateCompanion<AppSetting> {
+  final Value<int> id;
+  final Value<String> key;
+  final Value<String> value;
+  const AppSettingsCompanion({
+    this.id = const Value.absent(),
+    this.key = const Value.absent(),
+    this.value = const Value.absent(),
+  });
+  AppSettingsCompanion.insert({
+    this.id = const Value.absent(),
+    required String key,
+    required String value,
+  })  : key = Value(key),
+        value = Value(value);
+  static Insertable<AppSetting> custom({
+    Expression<int>? id,
+    Expression<String>? key,
+    Expression<String>? value,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (key != null) 'key': key,
+      if (value != null) 'value': value,
+    });
+  }
+
+  AppSettingsCompanion copyWith(
+      {Value<int>? id, Value<String>? key, Value<String>? value}) {
+    return AppSettingsCompanion(
+      id: id ?? this.id,
+      key: key ?? this.key,
+      value: value ?? this.value,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (key.present) {
+      map['key'] = Variable<String>(key.value);
+    }
+    if (value.present) {
+      map['value'] = Variable<String>(value.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('AppSettingsCompanion(')
+          ..write('id: $id, ')
+          ..write('key: $key, ')
+          ..write('value: $value')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -3164,6 +3848,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $ExchangeRatesTable exchangeRates = $ExchangeRatesTable(this);
   late final $DebtsTable debts = $DebtsTable(this);
   late final $RecurringRulesTable recurringRules = $RecurringRulesTable(this);
+  late final $UserProfilesTable userProfiles = $UserProfilesTable(this);
+  late final $AppSettingsTable appSettings = $AppSettingsTable(this);
   late final Index budgetPeriodUnique = Index('budget_period_unique',
       'CREATE UNIQUE INDEX budget_period_unique ON budgets (category_id, period_month, period_year, scope_id)');
   late final Index transactionsCategoryDate = Index(
@@ -3181,6 +3867,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
         exchangeRates,
         debts,
         recurringRules,
+        userProfiles,
+        appSettings,
         budgetPeriodUnique,
         transactionsCategoryDate
       ];
@@ -5564,6 +6252,367 @@ typedef $$RecurringRulesTableProcessedTableManager = ProcessedTableManager<
     (RecurringRule, $$RecurringRulesTableReferences),
     RecurringRule,
     PrefetchHooks Function({bool categoryId})>;
+typedef $$UserProfilesTableCreateCompanionBuilder = UserProfilesCompanion
+    Function({
+  Value<int> id,
+  required String name,
+  required String email,
+  Value<String?> passwordHash,
+  Value<String> region,
+  Value<String?> avatarPath,
+  Value<bool> isGoogleAccount,
+  Value<String?> googleId,
+  required DateTime createdAt,
+});
+typedef $$UserProfilesTableUpdateCompanionBuilder = UserProfilesCompanion
+    Function({
+  Value<int> id,
+  Value<String> name,
+  Value<String> email,
+  Value<String?> passwordHash,
+  Value<String> region,
+  Value<String?> avatarPath,
+  Value<bool> isGoogleAccount,
+  Value<String?> googleId,
+  Value<DateTime> createdAt,
+});
+
+class $$UserProfilesTableFilterComposer
+    extends Composer<_$AppDatabase, $UserProfilesTable> {
+  $$UserProfilesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get name => $composableBuilder(
+      column: $table.name, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get email => $composableBuilder(
+      column: $table.email, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get passwordHash => $composableBuilder(
+      column: $table.passwordHash, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get region => $composableBuilder(
+      column: $table.region, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get avatarPath => $composableBuilder(
+      column: $table.avatarPath, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<bool> get isGoogleAccount => $composableBuilder(
+      column: $table.isGoogleAccount,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get googleId => $composableBuilder(
+      column: $table.googleId, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+      column: $table.createdAt, builder: (column) => ColumnFilters(column));
+}
+
+class $$UserProfilesTableOrderingComposer
+    extends Composer<_$AppDatabase, $UserProfilesTable> {
+  $$UserProfilesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get name => $composableBuilder(
+      column: $table.name, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get email => $composableBuilder(
+      column: $table.email, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get passwordHash => $composableBuilder(
+      column: $table.passwordHash,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get region => $composableBuilder(
+      column: $table.region, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get avatarPath => $composableBuilder(
+      column: $table.avatarPath, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<bool> get isGoogleAccount => $composableBuilder(
+      column: $table.isGoogleAccount,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get googleId => $composableBuilder(
+      column: $table.googleId, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+      column: $table.createdAt, builder: (column) => ColumnOrderings(column));
+}
+
+class $$UserProfilesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $UserProfilesTable> {
+  $$UserProfilesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get email =>
+      $composableBuilder(column: $table.email, builder: (column) => column);
+
+  GeneratedColumn<String> get passwordHash => $composableBuilder(
+      column: $table.passwordHash, builder: (column) => column);
+
+  GeneratedColumn<String> get region =>
+      $composableBuilder(column: $table.region, builder: (column) => column);
+
+  GeneratedColumn<String> get avatarPath => $composableBuilder(
+      column: $table.avatarPath, builder: (column) => column);
+
+  GeneratedColumn<bool> get isGoogleAccount => $composableBuilder(
+      column: $table.isGoogleAccount, builder: (column) => column);
+
+  GeneratedColumn<String> get googleId =>
+      $composableBuilder(column: $table.googleId, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+}
+
+class $$UserProfilesTableTableManager extends RootTableManager<
+    _$AppDatabase,
+    $UserProfilesTable,
+    UserProfile,
+    $$UserProfilesTableFilterComposer,
+    $$UserProfilesTableOrderingComposer,
+    $$UserProfilesTableAnnotationComposer,
+    $$UserProfilesTableCreateCompanionBuilder,
+    $$UserProfilesTableUpdateCompanionBuilder,
+    (
+      UserProfile,
+      BaseReferences<_$AppDatabase, $UserProfilesTable, UserProfile>
+    ),
+    UserProfile,
+    PrefetchHooks Function()> {
+  $$UserProfilesTableTableManager(_$AppDatabase db, $UserProfilesTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$UserProfilesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$UserProfilesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$UserProfilesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            Value<String> name = const Value.absent(),
+            Value<String> email = const Value.absent(),
+            Value<String?> passwordHash = const Value.absent(),
+            Value<String> region = const Value.absent(),
+            Value<String?> avatarPath = const Value.absent(),
+            Value<bool> isGoogleAccount = const Value.absent(),
+            Value<String?> googleId = const Value.absent(),
+            Value<DateTime> createdAt = const Value.absent(),
+          }) =>
+              UserProfilesCompanion(
+            id: id,
+            name: name,
+            email: email,
+            passwordHash: passwordHash,
+            region: region,
+            avatarPath: avatarPath,
+            isGoogleAccount: isGoogleAccount,
+            googleId: googleId,
+            createdAt: createdAt,
+          ),
+          createCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            required String name,
+            required String email,
+            Value<String?> passwordHash = const Value.absent(),
+            Value<String> region = const Value.absent(),
+            Value<String?> avatarPath = const Value.absent(),
+            Value<bool> isGoogleAccount = const Value.absent(),
+            Value<String?> googleId = const Value.absent(),
+            required DateTime createdAt,
+          }) =>
+              UserProfilesCompanion.insert(
+            id: id,
+            name: name,
+            email: email,
+            passwordHash: passwordHash,
+            region: region,
+            avatarPath: avatarPath,
+            isGoogleAccount: isGoogleAccount,
+            googleId: googleId,
+            createdAt: createdAt,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ));
+}
+
+typedef $$UserProfilesTableProcessedTableManager = ProcessedTableManager<
+    _$AppDatabase,
+    $UserProfilesTable,
+    UserProfile,
+    $$UserProfilesTableFilterComposer,
+    $$UserProfilesTableOrderingComposer,
+    $$UserProfilesTableAnnotationComposer,
+    $$UserProfilesTableCreateCompanionBuilder,
+    $$UserProfilesTableUpdateCompanionBuilder,
+    (
+      UserProfile,
+      BaseReferences<_$AppDatabase, $UserProfilesTable, UserProfile>
+    ),
+    UserProfile,
+    PrefetchHooks Function()>;
+typedef $$AppSettingsTableCreateCompanionBuilder = AppSettingsCompanion
+    Function({
+  Value<int> id,
+  required String key,
+  required String value,
+});
+typedef $$AppSettingsTableUpdateCompanionBuilder = AppSettingsCompanion
+    Function({
+  Value<int> id,
+  Value<String> key,
+  Value<String> value,
+});
+
+class $$AppSettingsTableFilterComposer
+    extends Composer<_$AppDatabase, $AppSettingsTable> {
+  $$AppSettingsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get key => $composableBuilder(
+      column: $table.key, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get value => $composableBuilder(
+      column: $table.value, builder: (column) => ColumnFilters(column));
+}
+
+class $$AppSettingsTableOrderingComposer
+    extends Composer<_$AppDatabase, $AppSettingsTable> {
+  $$AppSettingsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get key => $composableBuilder(
+      column: $table.key, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get value => $composableBuilder(
+      column: $table.value, builder: (column) => ColumnOrderings(column));
+}
+
+class $$AppSettingsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $AppSettingsTable> {
+  $$AppSettingsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get key =>
+      $composableBuilder(column: $table.key, builder: (column) => column);
+
+  GeneratedColumn<String> get value =>
+      $composableBuilder(column: $table.value, builder: (column) => column);
+}
+
+class $$AppSettingsTableTableManager extends RootTableManager<
+    _$AppDatabase,
+    $AppSettingsTable,
+    AppSetting,
+    $$AppSettingsTableFilterComposer,
+    $$AppSettingsTableOrderingComposer,
+    $$AppSettingsTableAnnotationComposer,
+    $$AppSettingsTableCreateCompanionBuilder,
+    $$AppSettingsTableUpdateCompanionBuilder,
+    (AppSetting, BaseReferences<_$AppDatabase, $AppSettingsTable, AppSetting>),
+    AppSetting,
+    PrefetchHooks Function()> {
+  $$AppSettingsTableTableManager(_$AppDatabase db, $AppSettingsTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$AppSettingsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$AppSettingsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$AppSettingsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            Value<String> key = const Value.absent(),
+            Value<String> value = const Value.absent(),
+          }) =>
+              AppSettingsCompanion(
+            id: id,
+            key: key,
+            value: value,
+          ),
+          createCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            required String key,
+            required String value,
+          }) =>
+              AppSettingsCompanion.insert(
+            id: id,
+            key: key,
+            value: value,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ));
+}
+
+typedef $$AppSettingsTableProcessedTableManager = ProcessedTableManager<
+    _$AppDatabase,
+    $AppSettingsTable,
+    AppSetting,
+    $$AppSettingsTableFilterComposer,
+    $$AppSettingsTableOrderingComposer,
+    $$AppSettingsTableAnnotationComposer,
+    $$AppSettingsTableCreateCompanionBuilder,
+    $$AppSettingsTableUpdateCompanionBuilder,
+    (AppSetting, BaseReferences<_$AppDatabase, $AppSettingsTable, AppSetting>),
+    AppSetting,
+    PrefetchHooks Function()>;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -5582,4 +6631,8 @@ class $AppDatabaseManager {
       $$DebtsTableTableManager(_db, _db.debts);
   $$RecurringRulesTableTableManager get recurringRules =>
       $$RecurringRulesTableTableManager(_db, _db.recurringRules);
+  $$UserProfilesTableTableManager get userProfiles =>
+      $$UserProfilesTableTableManager(_db, _db.userProfiles);
+  $$AppSettingsTableTableManager get appSettings =>
+      $$AppSettingsTableTableManager(_db, _db.appSettings);
 }

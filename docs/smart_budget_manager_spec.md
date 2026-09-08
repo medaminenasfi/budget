@@ -292,7 +292,7 @@ Phase 1: Core DB + Home + Monthly Expenses   → working single-category app
 Phase 2: Special Purchases + Travel + Savings → all 4 original categories live
 Phase 3: Charts + Search/Filter              → visual & usable
 Phase 4: Multi-currency + Debt Tracker       → full 5-category app
-Phase 5: Recurring + Alerts + Photos         → smart automation
+Phase 5: Recurring + Alerts + Photos         → smart automation done
 Phase 6: Localization + Security + Dark mode → production polish
 Phase 7: Export + Backup + (Cloud, optional) → data safety & portability
 ```

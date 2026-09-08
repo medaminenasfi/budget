@@ -112,7 +112,10 @@ class SpecialPurchasesScreen extends ConsumerWidget {
                             subtitle: Text(
                               item.isPurchased ? 'Purchased' : 'Wishlist item',
                             ),
-                            secondary: Text(formatTnd(item.amountMinor)),
+                            secondary: Consumer(builder: (context, ref, _) {
+                              final curr = ref.watch(appCurrencyProvider);
+                              return Text(formatAmount(item.amountMinor, curr));
+                            }),
                           ),
                         ),
                       ),
@@ -234,8 +237,11 @@ class _AddSpecialPurchaseDialogState
               _loadRate();
             },
           ),
-          Text(
-              'Converted preview: ${formatTnd(((parseCurrencyMinor(amountController.text, currency) ?? 0) * rate * (currency == 'TND' ? 1 : 10)).round())}'),
+          Consumer(builder: (context, ref, _) {
+            final appCurr = ref.watch(appCurrencyProvider);
+            return Text(
+                'Converted preview: ${formatAmount(((parseCurrencyMinor(amountController.text, currency) ?? 0) * rate * (currency == 'TND' ? 1 : 10)).round(), appCurr)}');
+          }),
           TextField(
             controller: amountController,
             decoration:
@@ -536,7 +542,10 @@ class TripDetailsScreen extends ConsumerWidget {
                         child: ListTile(
                           title: Text(item.title),
                           subtitle: Text(item.subcategory ?? 'General'),
-                          trailing: Text(formatTnd(item.amountMinor)),
+                          trailing: Consumer(builder: (context, ref, _) {
+                            final curr = ref.watch(appCurrencyProvider);
+                            return Text(formatAmount(item.amountMinor, curr));
+                          }),
                           onTap: () => showDialog<void>(
                             context: context,
                             builder: (_) => AddTravelExpenseDialog(
@@ -750,18 +759,28 @@ class SavingsScreen extends ConsumerWidget {
                       children: [
                         const Text('Goal',
                             style: TextStyle(color: Colors.black54)),
-                        Text(
-                          savingSummary.budgetMinor == null
-                              ? 'Not set'
-                              : formatTnd(goal),
-                          style: Theme.of(context).textTheme.headlineSmall,
-                        ),
+                        Consumer(builder: (context, ref, _) {
+                          final curr = ref.watch(appCurrencyProvider);
+                          return Text(
+                            savingSummary.budgetMinor == null
+                                ? 'Not set'
+                                : formatAmount(goal, curr),
+                            style: Theme.of(context).textTheme.headlineSmall,
+                          );
+                        }),
                         const SizedBox(height: 12),
                         LinearProgressIndicator(value: progress),
                         const SizedBox(height: 8),
-                        Text('Saved ${formatTnd(savingSummary.spentMinor)}'),
-                        Text(
-                            'Remaining ${formatTnd(goal - savingSummary.spentMinor)}'),
+                        Consumer(builder: (context, ref, _) {
+                          final curr = ref.watch(appCurrencyProvider);
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Saved ${formatAmount(savingSummary.spentMinor, curr)}'),
+                              Text('Remaining ${formatAmount(goal - savingSummary.spentMinor, curr)}'),
+                            ],
+                          );
+                        }),
                       ],
                     ),
                   ),
@@ -800,7 +819,10 @@ class SavingsScreen extends ConsumerWidget {
                         child: ListTile(
                           title: Text(item.title),
                           subtitle: Text(shortDate(item.date)),
-                          trailing: Text(formatTnd(item.amountMinor)),
+                          trailing: Consumer(builder: (context, ref, _) {
+                            final curr = ref.watch(appCurrencyProvider);
+                            return Text(formatAmount(item.amountMinor, curr));
+                          }),
                           onTap: () => showDialog<void>(
                             context: context,
                             builder: (_) => AddSavingDialog(initial: item),
@@ -910,8 +932,11 @@ class _AddSavingDialogState extends ConsumerState<AddSavingDialog> {
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             onChanged: (_) => setState(() {}),
           ),
-          Text(
-              'Converted preview: ${formatTnd(((parseCurrencyMinor(amountController.text, currency) ?? 0) * rate * (currency == 'TND' ? 1 : 10)).round())}'),
+          Consumer(builder: (context, ref, _) {
+            final appCurr = ref.watch(appCurrencyProvider);
+            return Text(
+                'Converted preview: ${formatAmount(((parseCurrencyMinor(amountController.text, currency) ?? 0) * rate * (currency == 'TND' ? 1 : 10)).round(), appCurr)}');
+          }),
         ],
       ),
       actions: [
@@ -1010,10 +1035,13 @@ class PhaseTwoSummary extends StatelessWidget {
       children: [
         Text(label, style: const TextStyle(color: Colors.black54)),
         const SizedBox(height: 5),
-        Text(
-          amount == null ? 'Not set' : formatTnd(amount),
-          style: const TextStyle(fontWeight: FontWeight.w700),
-        ),
+        Consumer(builder: (context, ref, _) {
+          final curr = ref.watch(appCurrencyProvider);
+          return Text(
+            amount == null ? 'Not set' : formatAmount(amount, curr),
+            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+          );
+        }),
       ],
     );
   }
@@ -1028,10 +1056,7 @@ Widget _deleteBackground() {
   );
 }
 
-int? parseTnd(String value) {
-  final amount = double.tryParse(value.replaceAll(',', '.'));
-  return amount == null ? null : (amount * 1000).round();
-}
+
 
 String shortDate(DateTime date) {
   return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';

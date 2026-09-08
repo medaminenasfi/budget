@@ -108,6 +108,10 @@ class BudgetRepository {
     return _monthlyExpenses(period);
   }
 
+  Future<List<BudgetTransaction>> monthlyExpensesByMonth(DateTime period) {
+    return _monthlyExpenses(period);
+  }
+
   Future<List<TrendPoint>> sixMonthTrend(DateTime endMonth) async {
     final categories = await database.select(database.categories).get();
     final startMonth = DateTime(endMonth.year, endMonth.month - 5);

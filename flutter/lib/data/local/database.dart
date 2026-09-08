@@ -93,6 +93,27 @@ class RecurringRules extends Table {
   BoolColumn get active => boolean().withDefault(const Constant(true))();
 }
 
+/// User profile stored locally — used for auth and display.
+class UserProfiles extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get name => text()();
+  TextColumn get email => text()();
+  TextColumn get passwordHash => text().nullable()();
+  TextColumn get region => text().withDefault(const Constant('Tunisia'))();
+  TextColumn get avatarPath => text().nullable()();
+  BoolColumn get isGoogleAccount =>
+      boolean().withDefault(const Constant(false))();
+  TextColumn get googleId => text().nullable()();
+  DateTimeColumn get createdAt => dateTime()();
+}
+
+/// Key-value store for application settings (currency, biometrics, etc.).
+class AppSettings extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get key => text().unique()();
+  TextColumn get value => text()();
+}
+
 @DriftDatabase(
   tables: [
     Categories,
@@ -102,13 +123,15 @@ class RecurringRules extends Table {
     ExchangeRates,
     Debts,
     RecurringRules,
+    UserProfiles,
+    AppSettings,
   ],
 )
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(openDatabaseConnection());
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -132,6 +155,10 @@ class AppDatabase extends _$AppDatabase {
           if (from < 5) {
             await m.addColumn(
                 budgetTransactions, budgetTransactions.receiptPhotoPath);
+          }
+          if (from < 6) {
+            await m.createTable(userProfiles);
+            await m.createTable(appSettings);
           }
         },
       );
@@ -160,5 +187,23 @@ class AppDatabase extends _$AppDatabase {
         );
       }
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // AppSettings helpers
+  // ---------------------------------------------------------------------------
+
+  Future<String?> getSetting(String key) async {
+    final rows = await (select(appSettings)
+          ..where((s) => s.key.equals(key))
+          ..limit(1))
+        .get();
+    return rows.isEmpty ? null : rows.first.value;
+  }
+
+  Future<void> setSetting(String key, String value) async {
+    await into(appSettings).insertOnConflictUpdate(
+      AppSettingsCompanion.insert(key: key, value: value),
+    );
   }
 }

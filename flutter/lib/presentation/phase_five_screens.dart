@@ -45,7 +45,10 @@ class RecurringRulesScreen extends ConsumerWidget {
                           subtitle: Text(
                             '${rule.frequency} · Next ${phaseFiveShortDate(rule.nextDueDate)}',
                           ),
-                          trailing: Text(formatTnd(rule.amountMinor)),
+                          trailing: Consumer(builder: (context, ref, _) {
+                            final curr = ref.watch(appCurrencyProvider);
+                            return Text(formatAmount(rule.amountMinor, curr));
+                          }),
                           onLongPress: () async {
                             await ref
                                 .read(budgetRepositoryProvider)

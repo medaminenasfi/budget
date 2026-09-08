@@ -1,5 +1,6 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/local/database.dart';
 import '../data/repositories/budget_repository.dart';
@@ -87,8 +88,10 @@ class SpendingPieChart extends StatelessWidget {
                         color: colors[index % colors.length],
                       ),
                       const SizedBox(width: 5),
-                      Text(
-                          '${entries[index].key} ${formatTnd(entries[index].value)}'),
+                      Consumer(builder: (context, ref, _) {
+                        final curr = ref.watch(appCurrencyProvider);
+                        return Text('${entries[index].key} ${formatAmount(entries[index].value, curr)}');
+                      }),
                     ],
                   ),
               ],

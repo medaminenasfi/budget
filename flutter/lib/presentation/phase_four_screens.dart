@@ -137,8 +137,11 @@ class _DebtTotals extends StatelessWidget {
       children: [
         Text(label, style: const TextStyle(color: Colors.black54)),
         const SizedBox(height: 4),
-        Text(formatTnd(amount),
-            style: const TextStyle(fontWeight: FontWeight.w700)),
+        Consumer(builder: (context, ref, _) {
+          final curr = ref.watch(appCurrencyProvider);
+          return Text(formatAmount(amount, curr),
+              style: const TextStyle(fontWeight: FontWeight.w700));
+        }),
       ],
     );
   }

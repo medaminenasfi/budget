@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "com.smartbudget.smart_budget_manager"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 35
     ndkVersion = flutter.ndkVersion
 
     compileOptions {

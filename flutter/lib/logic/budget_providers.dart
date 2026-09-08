@@ -1,8 +1,17 @@
+import 'package:drift/drift.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/local/database.dart';
+import '../data/models/default_categories.dart';
 import '../data/repositories/budget_repository.dart';
+import '../data/repositories/settings_repository.dart';
+import '../data/repositories/auth_repository.dart';
+
+// ---------------------------------------------------------------------------
+// Core infrastructure
+// ---------------------------------------------------------------------------
 
 final databaseProvider = Provider<AppDatabase>((ref) {
   final database = AppDatabase();
@@ -13,6 +22,84 @@ final databaseProvider = Provider<AppDatabase>((ref) {
 final budgetRepositoryProvider = Provider<BudgetRepository>((ref) {
   return BudgetRepository(ref.watch(databaseProvider));
 });
+
+final settingsRepositoryProvider = Provider<SettingsRepository>((ref) {
+  return SettingsRepository(ref.watch(databaseProvider));
+});
+
+final localAuthRepositoryProvider = Provider<LocalAuthRepository>((ref) {
+  return LocalAuthRepository(
+    ref.watch(databaseProvider),
+    ref.watch(settingsRepositoryProvider),
+  );
+});
+
+final googleAuthRepositoryProvider = Provider<GoogleAuthRepository>((ref) {
+  return GoogleAuthRepository(
+    ref.watch(databaseProvider),
+    ref.watch(settingsRepositoryProvider),
+  );
+});
+
+final biometricRepositoryProvider = Provider<BiometricRepository>((ref) {
+  return BiometricRepository();
+});
+
+// ---------------------------------------------------------------------------
+// Auth & Session
+// ---------------------------------------------------------------------------
+
+/// Holds the currently authenticated user profile. Null means not logged in.
+final currentUserProvider = StateProvider<UserProfile?>((ref) => null);
+
+final isAuthenticatedProvider = Provider<bool>((ref) {
+  return ref.watch(currentUserProvider) != null;
+});
+
+final biometricAvailableProvider = FutureProvider<bool>((ref) async {
+  return ref.watch(biometricRepositoryProvider).isAvailable();
+});
+
+// ---------------------------------------------------------------------------
+// Currency — global setting that drives all formatAmount() calls
+// ---------------------------------------------------------------------------
+
+/// Holds the active display currency (e.g. "TND", "EUR").
+/// Backed by SharedPreferences via SettingsRepository.
+class _CurrencyNotifier extends StateNotifier<String> {
+  _CurrencyNotifier() : super('TND') {
+    _load();
+  }
+
+  Future<void> _load() async {
+    final prefs = await SharedPreferences.getInstance();
+    state = prefs.getString('app_currency') ?? 'TND';
+  }
+
+  Future<void> setCurrency(String currency) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('app_currency', currency);
+    state = currency;
+  }
+}
+
+final appCurrencyProvider =
+    StateNotifierProvider<_CurrencyNotifier, String>((ref) {
+  return _CurrencyNotifier();
+});
+
+// ---------------------------------------------------------------------------
+// Month selector — drives all monthly expense queries
+// ---------------------------------------------------------------------------
+
+final selectedMonthProvider = StateProvider<DateTime>((ref) {
+  final now = DateTime.now();
+  return DateTime(now.year, now.month);
+});
+
+// ---------------------------------------------------------------------------
+// Dashboard & budget alerts (use current real month always)
+// ---------------------------------------------------------------------------
 
 final dashboardProvider =
     FutureProvider.autoDispose<List<CategorySummary>>((ref) async {
@@ -29,27 +116,77 @@ final budgetAlertsProvider =
   return repository.budgetAlerts(DateTime.now());
 });
 
+// ---------------------------------------------------------------------------
+// Monthly expenses (drive by selectedMonthProvider)
+// ---------------------------------------------------------------------------
+
 final monthlySummaryProvider =
     FutureProvider.autoDispose<CategorySummary>((ref) async {
-  final summaries = await ref.watch(dashboardProvider.future);
-  return summaries.firstWhere((summary) => summary.category.type == 'monthly');
+  final selectedMonth = ref.watch(selectedMonthProvider);
+  final database = ref.watch(databaseProvider);
+  await database.seedCategories();
+
+  // Get the monthly category
+  final categories = await (database.select(database.categories)
+        ..where((c) => c.type.equals('monthly'))
+        ..limit(1))
+      .get();
+  if (categories.isEmpty) throw StateError('Monthly category not found');
+  final category = categories.first;
+
+  // Get budget for selected month
+  final budgetRows = await (database.select(database.budgets)
+        ..where((b) =>
+            b.categoryId.equals(category.id) &
+            b.periodMonth.equals(selectedMonth.month) &
+            b.periodYear.equals(selectedMonth.year)))
+      .get();
+
+  // Get transactions for selected month
+  final transactions = await (database.select(database.budgetTransactions)
+        ..where((t) =>
+            t.categoryId.equals(category.id) &
+            t.date.isBetweenValues(
+              DateTime(selectedMonth.year, selectedMonth.month),
+              DateTime(selectedMonth.year, selectedMonth.month + 1),
+            )))
+      .get();
+
+  return CategorySummary(
+    category: category,
+    budgetMinor: budgetRows.isEmpty
+        ? null
+        : budgetRows.fold<int>(0, (total, b) => total + b.amountMinor),
+    spentMinor: transactions.fold<int>(
+        0, (total, t) => total + t.convertedAmountMinor),
+  );
 });
 
 final monthlyExpensesProvider =
     FutureProvider.autoDispose<List<BudgetTransaction>>((ref) async {
   final repository = ref.watch(budgetRepositoryProvider);
   final database = ref.watch(databaseProvider);
+  final selectedMonth = ref.watch(selectedMonthProvider);
   await database.seedCategories();
-  return repository.monthlyExpenses(DateTime.now());
+  return repository.monthlyExpenses(selectedMonth);
 });
 
+// ---------------------------------------------------------------------------
+// Filter state
+// ---------------------------------------------------------------------------
+
+final filterVisibleProvider = StateProvider.autoDispose<bool>((ref) => false);
 final monthlySearchProvider = StateProvider.autoDispose<String>((ref) => '');
 final monthlyCategoryProvider =
     StateProvider.autoDispose<String?>((ref) => null);
-final monthlyMinAmountProvider = StateProvider.autoDispose<String>((ref) => '');
-final monthlyMaxAmountProvider = StateProvider.autoDispose<String>((ref) => '');
+final monthlyMinAmountProvider =
+    StateProvider.autoDispose<String>((ref) => '');
+final monthlyMaxAmountProvider =
+    StateProvider.autoDispose<String>((ref) => '');
 final monthlyDateRangeProvider =
     StateProvider.autoDispose<DateTimeRange?>((ref) => null);
+final monthlyTypeFilterProvider =
+    StateProvider.autoDispose<String?>((ref) => null); // 'expense'|'income'|null
 
 final filteredMonthlyExpensesProvider =
     FutureProvider.autoDispose<List<BudgetTransaction>>((ref) async {
@@ -76,13 +213,9 @@ final filteredMonthlyExpensesProvider =
       .toList();
 });
 
-final sixMonthTrendProvider =
-    FutureProvider.autoDispose<List<TrendPoint>>((ref) async {
-  final repository = ref.watch(budgetRepositoryProvider);
-  final database = ref.watch(databaseProvider);
-  await database.seedCategories();
-  return repository.sixMonthTrend(DateTime.now());
-});
+// ---------------------------------------------------------------------------
+// Special, travel, savings, debts — unchanged
+// ---------------------------------------------------------------------------
 
 final specialPurchasesProvider =
     FutureProvider.autoDispose<List<BudgetTransaction>>((ref) async {
@@ -167,8 +300,58 @@ final recurringRulesProvider =
   return repository.recurringRules();
 });
 
-String formatTnd(int minorUnits) {
-  final sign = minorUnits < 0 ? '-' : '';
-  final absolute = minorUnits.abs();
-  return '$sign${(absolute / 1000).toStringAsFixed(3)} TND';
+final sixMonthTrendProvider =
+    FutureProvider.autoDispose<List<TrendPoint>>((ref) async {
+  final repository = ref.watch(budgetRepositoryProvider);
+  final database = ref.watch(databaseProvider);
+  await database.seedCategories();
+  return repository.sixMonthTrend(DateTime.now());
+});
+
+// ---------------------------------------------------------------------------
+// Currency-aware formatting helpers
+// ---------------------------------------------------------------------------
+
+/// Formats [minorUnits] (stored as TND millis × 1000) in the given [currency].
+/// When currency == TND: divide by 1000 with 3 decimal places.
+/// When currency == other: convert via exchange rate, divide by 100 with 2 dp.
+///
+/// For simple display (no conversion), use [formatAmount] with [minorUnits]
+/// already in TND millis.
+String formatAmount(int minorTnd, String currency,
+    {double exchangeRate = 1.0}) {
+  if (currency == 'TND') {
+    final sign = minorTnd < 0 ? '-' : '';
+    final absolute = minorTnd.abs();
+    return '$sign${(absolute / 1000).toStringAsFixed(3)} TND';
+  }
+  // Convert TND millis to foreign currency
+  final converted = minorTnd / 1000 / exchangeRate;
+  final sign = converted < 0 ? '-' : '';
+  final symbol = _currencySymbol(currency);
+  return '$sign${converted.abs().toStringAsFixed(2)} $symbol';
+}
+
+/// Legacy alias — formats TND millis with TND symbol.
+String formatTnd(int minorUnits) => formatAmount(minorUnits, 'TND');
+
+String _currencySymbol(String currency) {
+  const symbols = {
+    'TND': 'TND',
+    'EUR': '€',
+    'USD': '\$',
+    'GBP': '£',
+    'MAD': 'MAD',
+    'DZD': 'DZD',
+    'SAR': 'SAR',
+    'AED': 'AED',
+    'JPY': '¥',
+    'CNY': '¥',
+  };
+  return symbols[currency] ?? currency;
+}
+
+int? parseTnd(String value) {
+  final amount = double.tryParse(value.replaceAll(',', '.'));
+  return amount == null ? null : (amount * 1000).round();
 }
