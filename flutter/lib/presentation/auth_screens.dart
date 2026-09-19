@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/models/default_categories.dart';
+import '../data/repositories/auth_repository.dart';
 import '../logic/budget_providers.dart';
 
 // ---------------------------------------------------------------------------
@@ -107,18 +108,34 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   }
 
   Future<void> _googleSignIn() async {
-    setState(() => _loading = true);
-    final repo = ref.read(googleAuthRepositoryProvider);
-    final profile = await repo.signInWithGoogle();
-    if (!mounted) return;
-    setState(() => _loading = false);
-    if (profile == null) {
-      setState(() => _error =
-          'Google Sign-In failed or was cancelled. Make sure google-services.json is configured.');
-      return;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final repo = ref.read(googleAuthRepositoryProvider);
+      final profile = await repo.signInWithGoogle();
+      if (!mounted) return;
+      setState(() => _loading = false);
+      if (profile == null) {
+        setState(() => _error = 'Google Sign-In was cancelled.');
+        return;
+      }
+      ref.read(currentUserProvider.notifier).state = profile;
+      _goHome();
+    } on GoogleSignInFailure catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = e.message;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = 'Google Sign-In failed: $e';
+      });
     }
-    ref.read(currentUserProvider.notifier).state = profile;
-    _goHome();
   }
 
   @override
@@ -126,9 +143,14 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     final theme = Theme.of(context);
     return Scaffold(
       backgroundColor: const Color(0xFFF7F5F0),
-      body: SafeArea(
-        child: Column(
-          children: [
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxHeight < 80 || constraints.maxWidth < 80) {
+            return const SizedBox.expand();
+          }
+          return SafeArea(
+            child: Column(
+              children: [
             // Progress indicator
             Padding(
               padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
@@ -162,6 +184,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             ),
           ],
         ),
+          );
+        },
       ),
     );
   }
@@ -213,9 +237,14 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               labelText: 'Password',
               prefixIcon: const Icon(Icons.lock_outline),
               suffixIcon: IconButton(
-                icon: Icon(_obscurePassword
-                    ? Icons.visibility_off_outlined
-                    : Icons.visibility_outlined),
+                icon: Icon(
+                  _obscurePassword
+                      ? Icons.visibility_off_outlined
+                      : Icons.visibility_outlined,
+                  color: _obscurePassword
+                      ? Colors.black45
+                      : theme.colorScheme.primary,
+                ),
                 onPressed: () =>
                     setState(() => _obscurePassword = !_obscurePassword),
               ),
@@ -281,7 +310,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 side: const BorderSide(color: Colors.black12),
                 backgroundColor: Colors.white,
               ),
-              icon: const Icon(Icons.g_mobiledata, size: 28),
+              icon: const GoogleGIcon(),
               label: const Text('Continue with Google',
                   style: TextStyle(fontWeight: FontWeight.w500)),
             ),
@@ -449,6 +478,27 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _obscure = true;
   bool _loading = false;
   String? _error;
+  bool _autoBiometricTried = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _tryAutoBiometric();
+    });
+  }
+
+  Future<void> _tryAutoBiometric() async {
+    if (_autoBiometricTried) return;
+    _autoBiometricTried = true;
+    final available =
+        await ref.read(biometricRepositoryProvider).isAvailable();
+    final enabled =
+        await ref.read(settingsRepositoryProvider).isBiometricEnabled();
+    if (available && enabled && mounted) {
+      await _loginBiometric();
+    }
+  }
 
   @override
   void dispose() {
@@ -483,13 +533,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   Future<void> _loginBiometric() async {
     final repo = ref.read(biometricRepositoryProvider);
-    final settings = ref.read(settingsRepositoryProvider);
-    final enabled = await settings.isBiometricEnabled();
+    final enabled =
+        await ref.read(settingsRepositoryProvider).isBiometricEnabled();
     if (!enabled) return;
     final ok = await repo.authenticate();
     if (!mounted) return;
     if (ok) {
-      final profile = await settings.getProfile();
+      final profile =
+          await ref.read(settingsRepositoryProvider).getProfile();
       if (profile != null) {
         ref.read(currentUserProvider.notifier).state = profile;
         _goHome();
@@ -498,18 +549,34 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Future<void> _googleLogin() async {
-    setState(() => _loading = true);
-    final repo = ref.read(googleAuthRepositoryProvider);
-    final profile = await repo.signInWithGoogle();
-    if (!mounted) return;
-    setState(() => _loading = false);
-    if (profile == null) {
-      setState(
-          () => _error = 'Google Sign-In failed. Please try again.');
-      return;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final repo = ref.read(googleAuthRepositoryProvider);
+      final profile = await repo.signInWithGoogle();
+      if (!mounted) return;
+      setState(() => _loading = false);
+      if (profile == null) {
+        setState(() => _error = 'Google Sign-In was cancelled.');
+        return;
+      }
+      ref.read(currentUserProvider.notifier).state = profile;
+      _goHome();
+    } on GoogleSignInFailure catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = e.message;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = 'Google Sign-In failed: $e';
+      });
     }
-    ref.read(currentUserProvider.notifier).state = profile;
-    _goHome();
   }
 
   void _goHome() {
@@ -520,13 +587,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final biometricAsync = ref.watch(biometricAvailableProvider);
-    final settingsRepo = ref.watch(settingsRepositoryProvider);
+    final biometricEnabled = ref.watch(biometricEnabledProvider);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF7F5F0),
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxHeight < 80 || constraints.maxWidth < 80) {
+            return const SizedBox.expand();
+          }
+          return SafeArea(
+            child: Center(
+              child: SingleChildScrollView(
             padding: const EdgeInsets.all(28),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -572,9 +644,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     labelText: 'Password',
                     prefixIcon: const Icon(Icons.lock_outline),
                     suffixIcon: IconButton(
-                      icon: Icon(_obscure
-                          ? Icons.visibility_off_outlined
-                          : Icons.visibility_outlined),
+                      icon: Icon(
+                        _obscure
+                            ? Icons.visibility_off_outlined
+                            : Icons.visibility_outlined,
+                        color: _obscure
+                            ? Colors.black45
+                            : theme.colorScheme.primary,
+                      ),
                       onPressed: () =>
                           setState(() => _obscure = !_obscure),
                     ),
@@ -629,32 +706,34 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 const SizedBox(height: 12),
                 // Biometric button
                 biometricAsync.when(
-                  data: (available) => FutureBuilder<bool>(
-                    future: settingsRepo.isBiometricEnabled(),
-                    builder: (context, snap) {
-                      if (available && (snap.data ?? false)) {
-                        return SizedBox(
-                          width: double.infinity,
-                          height: 52,
-                          child: OutlinedButton.icon(
-                            onPressed: _loginBiometric,
-                            style: OutlinedButton.styleFrom(
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12)),
-                              side: const BorderSide(color: Colors.black12),
-                              backgroundColor: Colors.white,
-                            ),
-                            icon:
-                                const Icon(Icons.fingerprint, size: 24),
-                            label: const Text('Use Biometrics',
-                                style: TextStyle(
-                                    fontWeight: FontWeight.w500)),
+                  data: (available) {
+                    if (available && biometricEnabled) {
+                      return SizedBox(
+                        width: double.infinity,
+                        height: 52,
+                        child: OutlinedButton.icon(
+                          onPressed: _loginBiometric,
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: theme.colorScheme.primary,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12)),
+                            side: BorderSide(
+                                color: theme.colorScheme.primary
+                                    .withOpacity(0.45)),
+                            backgroundColor: theme.colorScheme.primary
+                                .withOpacity(0.08),
                           ),
-                        );
-                      }
-                      return const SizedBox.shrink();
-                    },
-                  ),
+                          icon: Icon(Icons.fingerprint,
+                              size: 24,
+                              color: theme.colorScheme.primary),
+                          label: const Text('Use Biometrics',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.w600)),
+                        ),
+                      );
+                    }
+                    return const SizedBox.shrink();
+                  },
                   loading: () => const SizedBox.shrink(),
                   error: (_, __) => const SizedBox.shrink(),
                 ),
@@ -682,7 +761,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       side: const BorderSide(color: Colors.black12),
                       backgroundColor: Colors.white,
                     ),
-                    icon: const Icon(Icons.g_mobiledata, size: 28),
+                    icon: const GoogleGIcon(),
                     label: const Text('Continue with Google',
                         style: TextStyle(fontWeight: FontWeight.w500)),
                   ),
@@ -702,6 +781,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             ),
           ),
         ),
+          );
+        },
       ),
     );
   }
@@ -722,10 +803,9 @@ class BiometricSetupScreen extends ConsumerWidget {
 
     Future<void> enable() async {
       final biometricRepo = ref.read(biometricRepositoryProvider);
-      final settingsRepo = ref.read(settingsRepositoryProvider);
       final ok = await biometricRepo.authenticate();
       if (ok) {
-        await settingsRepo.setBiometricEnabled(true);
+        await ref.read(biometricEnabledProvider.notifier).setEnabled(true);
       }
       if (!context.mounted) return;
       Navigator.of(context).pushNamedAndRemoveUntil('/', (_) => false);
@@ -794,4 +874,56 @@ class BiometricSetupScreen extends ConsumerWidget {
       ),
     );
   }
+}
+
+class GoogleGIcon extends StatelessWidget {
+  const GoogleGIcon({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 22,
+      height: 22,
+      child: CustomPaint(painter: _GoogleGPainter()),
+    );
+  }
+}
+
+class _GoogleGPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final stroke = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = size.width * 0.18
+      ..strokeCap = StrokeCap.round;
+
+    final rect = Rect.fromLTWH(
+      size.width * 0.12,
+      size.height * 0.12,
+      size.width * 0.76,
+      size.height * 0.76,
+    );
+
+    stroke.color = const Color(0xFF4285F4);
+    canvas.drawArc(rect, -0.4, 1.6, false, stroke);
+    stroke.color = const Color(0xFF34A853);
+    canvas.drawArc(rect, 1.2, 1.3, false, stroke);
+    stroke.color = const Color(0xFFFBBC05);
+    canvas.drawArc(rect, 2.5, 0.9, false, stroke);
+    stroke.color = const Color(0xFFEA4335);
+    canvas.drawArc(rect, 3.5, 1.4, false, stroke);
+
+    final bar = Paint()
+      ..color = const Color(0xFF4285F4)
+      ..strokeWidth = size.width * 0.18
+      ..strokeCap = StrokeCap.butt;
+    canvas.drawLine(
+      Offset(size.width * 0.50, size.height * 0.50),
+      Offset(size.width * 0.88, size.height * 0.50),
+      bar,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

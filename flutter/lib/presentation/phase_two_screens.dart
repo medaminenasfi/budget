@@ -15,26 +15,11 @@ class SpecialPurchasesScreen extends ConsumerWidget {
     final summary = ref.watch(specialSummaryProvider);
     final items = ref.watch(specialPurchasesProvider);
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Special Purchases'),
-        actions: [
-          IconButton(
-            tooltip: 'Set purchase budget',
-            onPressed: () => showDialog<void>(
-              context: context,
-              builder: (_) => const CategoryBudgetDialog(
-                type: 'special',
-                title: 'Set purchase budget',
-              ),
-            ),
-            icon: const Icon(Icons.account_balance_wallet_outlined),
-          ),
-        ],
-      ),
+      appBar: AppBar(title: const Text('Special Purchases')),
       body: summary.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, _) =>
-            Center(child: Text('Could not load budget: $error')),
+            Center(child: Text('Could not load purchases: $error')),
         data: (purchaseSummary) => items.when(
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (error, _) =>
@@ -48,12 +33,17 @@ class SpecialPurchasesScreen extends ConsumerWidget {
             return ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                PhaseTwoSummary(summary: purchaseSummary),
+                PhaseTwoSummary(
+                  summary: purchaseSummary,
+                  budgetLabel: 'Target',
+                  spentLabel: 'Funded',
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Add an item and its price, then add money until you reach the full amount.',
+                  style: TextStyle(color: Colors.black54),
+                ),
                 const SizedBox(height: 18),
-                SpendingPieChart(
-                    items: list.where((item) => item.isPurchased).toList()),
-                if (list.any((item) => item.isPurchased))
-                  const SizedBox(height: 18),
                 TextField(
                   decoration: const InputDecoration(
                     labelText: 'Search purchases',
@@ -67,7 +57,8 @@ class SpecialPurchasesScreen extends ConsumerWidget {
                 if (visible.isEmpty)
                   const Padding(
                     padding: EdgeInsets.only(top: 40),
-                    child: Center(child: Text('Your wishlist is empty.')),
+                    child: Center(
+                        child: Text('No special purchases yet. Add one.')),
                   )
                 else
                   ...visible.map(
@@ -83,40 +74,30 @@ class SpecialPurchasesScreen extends ConsumerWidget {
                         ref.invalidate(specialSummaryProvider);
                         ref.invalidate(dashboardProvider);
                       },
-                      child: Card(
-                        elevation: 0,
-                        child: InkWell(
-                          onTap: () => showDialog<void>(
-                            context: context,
-                            builder: (_) =>
-                                AddSpecialPurchaseDialog(initial: item),
-                          ),
-                          child: CheckboxListTile(
-                            value: item.isPurchased,
-                            onChanged: (_) async {
+                      child: _FundingItemCard(
+                        item: item,
+                        onAddMoney: () => showDialog<void>(
+                          context: context,
+                          builder: (_) => ContributeDialog(
+                            item: item,
+                            title: 'Add money to ${item.title}',
+                            onSave: (amount) async {
                               await ref
                                   .read(budgetRepositoryProvider)
-                                  .toggleSpecialPurchase(item);
+                                  .contributeToSpecialPurchase(
+                                    item: item,
+                                    addMinor: amount,
+                                  );
                               ref.invalidate(specialPurchasesProvider);
                               ref.invalidate(specialSummaryProvider);
                               ref.invalidate(dashboardProvider);
                             },
-                            title: Text(
-                              item.title,
-                              style: TextStyle(
-                                decoration: item.isPurchased
-                                    ? TextDecoration.lineThrough
-                                    : null,
-                              ),
-                            ),
-                            subtitle: Text(
-                              item.isPurchased ? 'Purchased' : 'Wishlist item',
-                            ),
-                            secondary: Consumer(builder: (context, ref, _) {
-                              final curr = ref.watch(appCurrencyProvider);
-                              return Text(formatAmount(item.amountMinor, curr));
-                            }),
                           ),
+                        ),
+                        onEdit: () => showDialog<void>(
+                          context: context,
+                          builder: (_) =>
+                              AddSpecialPurchaseDialog(initial: item),
                         ),
                       ),
                     ),
@@ -126,13 +107,14 @@ class SpecialPurchasesScreen extends ConsumerWidget {
           },
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        tooltip: 'Add purchase',
+      floatingActionButton: FloatingActionButton.extended(
+        tooltip: 'Add special purchase',
         onPressed: () => showDialog<void>(
           context: context,
           builder: (_) => const AddSpecialPurchaseDialog(),
         ),
-        child: const Icon(Icons.add),
+        icon: const Icon(Icons.add),
+        label: const Text('Add purchase'),
       ),
     );
   }
@@ -152,7 +134,6 @@ class _AddSpecialPurchaseDialogState
     extends ConsumerState<AddSpecialPurchaseDialog> {
   final titleController = TextEditingController();
   final amountController = TextEditingController();
-  bool purchased = false;
   String currency = 'TND';
   double rate = 1;
 
@@ -166,7 +147,6 @@ class _AddSpecialPurchaseDialogState
       amountController.text =
           (initial.amountMinor / (currency == 'TND' ? 1000 : 100))
               .toStringAsFixed(2);
-      purchased = initial.isPurchased;
     }
     _loadRate();
   }
@@ -195,7 +175,6 @@ class _AddSpecialPurchaseDialogState
         title: titleController.text.trim(),
         amountMinor: amount,
         currency: currency,
-        purchased: purchased,
       );
     } else {
       await repository.updateSpecialPurchase(
@@ -203,7 +182,6 @@ class _AddSpecialPurchaseDialogState
         title: titleController.text.trim(),
         amountMinor: amount,
         currency: currency,
-        purchased: purchased,
       );
     }
     ref.invalidate(specialPurchasesProvider);
@@ -214,9 +192,12 @@ class _AddSpecialPurchaseDialogState
 
   @override
   Widget build(BuildContext context) {
+    final preview =
+        parseCurrencyMinor(amountController.text, currency) ?? 0;
     return AlertDialog(
-      title: Text(
-          widget.initial == null ? 'Add special purchase' : 'Edit purchase'),
+      title: Text(widget.initial == null
+          ? 'Add special purchase'
+          : 'Edit purchase'),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -237,24 +218,21 @@ class _AddSpecialPurchaseDialogState
               _loadRate();
             },
           ),
-          Consumer(builder: (context, ref, _) {
-            final appCurr = ref.watch(appCurrencyProvider);
-            return Text(
-                'Converted preview: ${formatAmount(((parseCurrencyMinor(amountController.text, currency) ?? 0) * rate * (currency == 'TND' ? 1 : 10)).round(), appCurr)}');
-          }),
           TextField(
             controller: amountController,
             decoration:
-                InputDecoration(labelText: 'Estimated cost ($currency)'),
+                InputDecoration(labelText: 'Target price ($currency)'),
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             onChanged: (_) => setState(() {}),
           ),
-          CheckboxListTile(
-            contentPadding: EdgeInsets.zero,
-            value: purchased,
-            onChanged: (value) => setState(() => purchased = value ?? false),
-            title: const Text('Already purchased'),
-          ),
+          const SizedBox(height: 8),
+          Consumer(builder: (context, ref, _) {
+            final appCurr = ref.watch(appCurrencyProvider);
+            return Text(
+              'Preview: ${formatAmount(convertPreview(preview, currency, rate), appCurr)}',
+              style: const TextStyle(color: Colors.black54),
+            );
+          }),
         ],
       ),
       actions: [
@@ -264,6 +242,159 @@ class _AddSpecialPurchaseDialogState
         ),
         FilledButton(onPressed: save, child: const Text('Save')),
       ],
+    );
+  }
+}
+
+int convertPreview(int amountMinor, String currency, double rate) {
+  if (currency == 'TND') return amountMinor;
+  return (amountMinor * rate * 10).round();
+}
+
+class ContributeDialog extends ConsumerStatefulWidget {
+  const ContributeDialog({
+    required this.item,
+    required this.title,
+    required this.onSave,
+    super.key,
+  });
+
+  final BudgetTransaction item;
+  final String title;
+  final Future<void> Function(int addMinor) onSave;
+
+  @override
+  ConsumerState<ContributeDialog> createState() => _ContributeDialogState();
+}
+
+class _ContributeDialogState extends ConsumerState<ContributeDialog> {
+  final amountController = TextEditingController();
+
+  @override
+  void dispose() {
+    amountController.dispose();
+    super.dispose();
+  }
+
+  Future<void> save() async {
+    final amount =
+        parseCurrencyMinor(amountController.text, widget.item.currency);
+    if (amount == null || amount <= 0) return;
+    await widget.onSave(amount);
+    if (mounted) Navigator.of(context).pop();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final saved = fundedAmount(
+      widget.item.notes,
+      targetMinor: widget.item.amountMinor,
+      completed: widget.item.isPurchased,
+    );
+    final remaining = (widget.item.amountMinor - saved).clamp(0, 1 << 30);
+    final curr = widget.item.currency;
+    return AlertDialog(
+      title: Text(widget.title),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Target ${formatAmount(widget.item.amountMinor, curr)} · '
+            'Saved ${formatAmount(saved, curr)} · '
+            'Remaining ${formatAmount(remaining, curr)}',
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: amountController,
+            decoration: InputDecoration(labelText: 'Add money ($curr)'),
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            autofocus: true,
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(onPressed: save, child: const Text('Add')),
+      ],
+    );
+  }
+}
+
+class _FundingItemCard extends ConsumerWidget {
+  const _FundingItemCard({
+    required this.item,
+    required this.onAddMoney,
+    required this.onEdit,
+  });
+
+  final BudgetTransaction item;
+  final VoidCallback onAddMoney;
+  final VoidCallback onEdit;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currency = ref.watch(appCurrencyProvider);
+    final saved = fundedAmount(
+      item.notes,
+      targetMinor: item.amountMinor,
+      completed: item.isPurchased,
+    );
+    final remaining = item.amountMinor - saved;
+    final progress =
+        item.amountMinor == 0 ? 0.0 : (saved / item.amountMinor).clamp(0.0, 1.0);
+    final done = item.isPurchased || remaining <= 0;
+    return Card(
+      elevation: 0,
+      margin: const EdgeInsets.only(bottom: 10),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    item.title,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      decoration: done ? TextDecoration.lineThrough : null,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Edit',
+                  onPressed: onEdit,
+                  icon: const Icon(Icons.edit_outlined, size: 20),
+                ),
+              ],
+            ),
+            LinearProgressIndicator(value: progress),
+            const SizedBox(height: 8),
+            Text(
+              done
+                  ? 'Completed ${formatAmount(item.amountMinor, currency)}'
+                  : 'Saved ${formatAmount(saved, currency)} · Remaining ${formatAmount(remaining, currency)}',
+              style: TextStyle(
+                color: done ? Colors.green.shade700 : Colors.black54,
+              ),
+            ),
+            if (!done)
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  onPressed: onAddMoney,
+                  icon: const Icon(Icons.add),
+                  label: const Text('Add money'),
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -287,7 +418,8 @@ class TravelScreen extends ConsumerWidget {
                 itemCount: list.length,
                 separatorBuilder: (_, __) => const SizedBox(height: 10),
                 itemBuilder: (context, index) {
-                  final trip = list[index];
+                  final progress = list[index];
+                  final trip = progress.trip;
                   return Dismissible(
                     key: ValueKey(trip.id),
                     direction: DismissDirection.endToStart,
@@ -302,9 +434,15 @@ class TravelScreen extends ConsumerWidget {
                       child: ListTile(
                         leading: const CircleAvatar(child: Icon(Icons.flight)),
                         title: Text(trip.destination),
-                        subtitle: Text(
-                          '${shortDate(trip.startDate)} - ${shortDate(trip.endDate)}',
-                        ),
+                        subtitle: Consumer(builder: (context, ref, _) {
+                          final curr = ref.watch(appCurrencyProvider);
+                          return Text(
+                            '${shortDate(trip.startDate)} - ${shortDate(trip.endDate)}\n'
+                            'Budget ${formatAmount(progress.budgetMinor, curr)} · '
+                            'Remaining ${formatAmount(progress.remainingMinor, curr)}',
+                          );
+                        }),
+                        isThreeLine: true,
                         trailing: IconButton(
                           tooltip: 'Edit trip',
                           onPressed: () => showDialog<void>(
@@ -400,6 +538,7 @@ class _AddTripDialogState extends ConsumerState<AddTripDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final budget = parseTnd(budgetController.text) ?? 0;
     return AlertDialog(
       title: Text(widget.initial == null ? 'Add trip' : 'Edit trip'),
       content: Column(
@@ -408,12 +547,23 @@ class _AddTripDialogState extends ConsumerState<AddTripDialog> {
           TextField(
             controller: destinationController,
             decoration: const InputDecoration(labelText: 'Destination'),
+            onChanged: (_) => setState(() {}),
           ),
           TextField(
             controller: budgetController,
             decoration: const InputDecoration(labelText: 'Budget (TND)'),
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            onChanged: (_) => setState(() {}),
           ),
+          const SizedBox(height: 8),
+          Consumer(builder: (context, ref, _) {
+            final curr = ref.watch(appCurrencyProvider);
+            return Text(
+              'Preview: ${destinationController.text.trim().isEmpty ? 'New trip' : destinationController.text.trim()}\n'
+              'Budget ${formatAmount(budget, curr)} · Remaining ${formatAmount(budget, curr)} (no expenses yet)',
+              style: const TextStyle(color: Colors.black54),
+            );
+          }),
           const SizedBox(height: 8),
           Row(
             children: [
@@ -712,22 +862,7 @@ class SavingsScreen extends ConsumerWidget {
     final summary = ref.watch(savingsSummaryProvider);
     final records = ref.watch(savingsRecordsProvider);
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Savings'),
-        actions: [
-          IconButton(
-            tooltip: 'Set savings goal',
-            onPressed: () => showDialog<void>(
-              context: context,
-              builder: (_) => const CategoryBudgetDialog(
-                type: 'savings',
-                title: 'Set savings goal',
-              ),
-            ),
-            icon: const Icon(Icons.flag_outlined),
-          ),
-        ],
-      ),
+      appBar: AppBar(title: const Text('Savings')),
       body: summary.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, _) =>
@@ -742,48 +877,18 @@ class SavingsScreen extends ConsumerWidget {
                 .where((item) =>
                     query.isEmpty || item.title.toLowerCase().contains(query))
                 .toList();
-            final goal = savingSummary.budgetMinor ?? 0;
-            final progress = goal == 0
-                ? 0.0
-                : (savingSummary.spentMinor / goal).clamp(0.0, 1.0);
             return ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                Card(
-                  elevation: 0,
-                  color: Colors.white,
-                  child: Padding(
-                    padding: const EdgeInsets.all(18),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Goal',
-                            style: TextStyle(color: Colors.black54)),
-                        Consumer(builder: (context, ref, _) {
-                          final curr = ref.watch(appCurrencyProvider);
-                          return Text(
-                            savingSummary.budgetMinor == null
-                                ? 'Not set'
-                                : formatAmount(goal, curr),
-                            style: Theme.of(context).textTheme.headlineSmall,
-                          );
-                        }),
-                        const SizedBox(height: 12),
-                        LinearProgressIndicator(value: progress),
-                        const SizedBox(height: 8),
-                        Consumer(builder: (context, ref, _) {
-                          final curr = ref.watch(appCurrencyProvider);
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('Saved ${formatAmount(savingSummary.spentMinor, curr)}'),
-                              Text('Remaining ${formatAmount(goal - savingSummary.spentMinor, curr)}'),
-                            ],
-                          );
-                        }),
-                      ],
-                    ),
-                  ),
+                PhaseTwoSummary(
+                  summary: savingSummary,
+                  budgetLabel: 'Goals',
+                  spentLabel: 'Saved',
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Add a new goal, then add money until it is complete. You can have many goals.',
+                  style: TextStyle(color: Colors.black54),
                 ),
                 const SizedBox(height: 18),
                 TextField(
@@ -796,10 +901,8 @@ class SavingsScreen extends ConsumerWidget {
                       ref.read(savingsSearchProvider.notifier).state = value,
                 ),
                 const SizedBox(height: 18),
-                SavingsBarChart(items: items),
-                if (visible.isNotEmpty) const SizedBox(height: 18),
                 if (visible.isEmpty)
-                  const Center(child: Text('No savings records yet.'))
+                  const Center(child: Text('No savings goals yet. Add one.'))
                 else
                   ...visible.map(
                     (item) => Dismissible(
@@ -814,19 +917,29 @@ class SavingsScreen extends ConsumerWidget {
                         ref.invalidate(savingsRecordsProvider);
                         ref.invalidate(dashboardProvider);
                       },
-                      child: Card(
-                        elevation: 0,
-                        child: ListTile(
-                          title: Text(item.title),
-                          subtitle: Text(shortDate(item.date)),
-                          trailing: Consumer(builder: (context, ref, _) {
-                            final curr = ref.watch(appCurrencyProvider);
-                            return Text(formatAmount(item.amountMinor, curr));
-                          }),
-                          onTap: () => showDialog<void>(
-                            context: context,
-                            builder: (_) => AddSavingDialog(initial: item),
+                      child: _FundingItemCard(
+                        item: item,
+                        onAddMoney: () => showDialog<void>(
+                          context: context,
+                          builder: (_) => ContributeDialog(
+                            item: item,
+                            title: 'Add money to ${item.title}',
+                            onSave: (amount) async {
+                              await ref
+                                  .read(budgetRepositoryProvider)
+                                  .contributeToSaving(
+                                    item: item,
+                                    addMinor: amount,
+                                  );
+                              ref.invalidate(savingsSummaryProvider);
+                              ref.invalidate(savingsRecordsProvider);
+                              ref.invalidate(dashboardProvider);
+                            },
                           ),
+                        ),
+                        onEdit: () => showDialog<void>(
+                          context: context,
+                          builder: (_) => AddSavingDialog(initial: item),
                         ),
                       ),
                     ),
@@ -836,13 +949,14 @@ class SavingsScreen extends ConsumerWidget {
           },
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        tooltip: 'Add saving',
+      floatingActionButton: FloatingActionButton.extended(
+        tooltip: 'Add savings goal',
         onPressed: () => showDialog<void>(
           context: context,
           builder: (_) => const AddSavingDialog(),
         ),
-        child: const Icon(Icons.add),
+        icon: const Icon(Icons.add),
+        label: const Text('Add goal'),
       ),
     );
   }
@@ -858,6 +972,7 @@ class AddSavingDialog extends ConsumerStatefulWidget {
 }
 
 class _AddSavingDialogState extends ConsumerState<AddSavingDialog> {
+  final titleController = TextEditingController();
   final amountController = TextEditingController();
   String currency = 'TND';
   double rate = 1;
@@ -867,6 +982,7 @@ class _AddSavingDialogState extends ConsumerState<AddSavingDialog> {
     super.initState();
     final initial = widget.initial;
     if (initial != null) {
+      titleController.text = initial.title;
       currency = initial.currency;
       amountController.text =
           (initial.amountMinor / (currency == 'TND' ? 1000 : 100))
@@ -883,19 +999,26 @@ class _AddSavingDialogState extends ConsumerState<AddSavingDialog> {
 
   @override
   void dispose() {
+    titleController.dispose();
     amountController.dispose();
     super.dispose();
   }
 
   Future<void> save() async {
     final amount = parseCurrencyMinor(amountController.text, currency);
-    if (amount == null || amount <= 0) return;
+    final title = titleController.text.trim();
+    if (title.isEmpty || amount == null || amount <= 0) return;
     final repository = ref.read(budgetRepositoryProvider);
     if (widget.initial == null) {
-      await repository.addSaving(amount, currency: currency);
+      await repository.addSavingGoal(
+        title: title,
+        amountMinor: amount,
+        currency: currency,
+      );
     } else {
       await repository.updateSaving(
         id: widget.initial!.id,
+        title: title,
         amountMinor: amount,
         currency: currency,
       );
@@ -909,10 +1032,14 @@ class _AddSavingDialogState extends ConsumerState<AddSavingDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text(widget.initial == null ? 'Add saving' : 'Edit saving'),
+      title: Text(widget.initial == null ? 'Add savings goal' : 'Edit goal'),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          TextField(
+            controller: titleController,
+            decoration: const InputDecoration(labelText: 'Goal name'),
+          ),
           DropdownButtonFormField<String>(
             value: currency,
             decoration: const InputDecoration(labelText: 'Currency'),
@@ -1006,9 +1133,16 @@ class _CategoryBudgetDialogState extends ConsumerState<CategoryBudgetDialog> {
 }
 
 class PhaseTwoSummary extends StatelessWidget {
-  const PhaseTwoSummary({required this.summary, super.key});
+  const PhaseTwoSummary({
+    required this.summary,
+    this.budgetLabel = 'Budget',
+    this.spentLabel = 'Spent',
+    super.key,
+  });
 
   final CategorySummary summary;
+  final String budgetLabel;
+  final String spentLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -1019,8 +1153,8 @@ class PhaseTwoSummary extends StatelessWidget {
         padding: const EdgeInsets.all(18),
         child: Row(
           children: [
-            Expanded(child: _summaryMetric('Budget', summary.budgetMinor)),
-            Expanded(child: _summaryMetric('Spent', summary.spentMinor)),
+            Expanded(child: _summaryMetric(budgetLabel, summary.budgetMinor)),
+            Expanded(child: _summaryMetric(spentLabel, summary.spentMinor)),
             Expanded(
                 child: _summaryMetric('Remaining', summary.remainingMinor)),
           ],

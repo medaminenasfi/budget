@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/local/database.dart';
-import '../data/models/default_categories.dart';
 import '../data/repositories/budget_repository.dart';
 import '../data/repositories/settings_repository.dart';
 import '../data/repositories/auth_repository.dart';
@@ -60,6 +59,28 @@ final biometricAvailableProvider = FutureProvider<bool>((ref) async {
   return ref.watch(biometricRepositoryProvider).isAvailable();
 });
 
+class BiometricEnabledNotifier extends StateNotifier<bool> {
+  BiometricEnabledNotifier(this._settings) : super(false) {
+    _load();
+  }
+
+  final SettingsRepository _settings;
+
+  Future<void> _load() async {
+    state = await _settings.isBiometricEnabled();
+  }
+
+  Future<void> setEnabled(bool enabled) async {
+    await _settings.setBiometricEnabled(enabled);
+    state = enabled;
+  }
+}
+
+final biometricEnabledProvider =
+    StateNotifierProvider<BiometricEnabledNotifier, bool>((ref) {
+  return BiometricEnabledNotifier(ref.watch(settingsRepositoryProvider));
+});
+
 // ---------------------------------------------------------------------------
 // Currency — global setting that drives all formatAmount() calls
 // ---------------------------------------------------------------------------
@@ -88,6 +109,28 @@ final appCurrencyProvider =
   return _CurrencyNotifier();
 });
 
+class _LocaleNotifier extends StateNotifier<String> {
+  _LocaleNotifier() : super('en') {
+    _load();
+  }
+
+  Future<void> _load() async {
+    final prefs = await SharedPreferences.getInstance();
+    state = prefs.getString('app_locale') ?? 'en';
+  }
+
+  Future<void> setLocale(String code) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('app_locale', code);
+    state = code;
+  }
+}
+
+final appLocaleProvider =
+    StateNotifierProvider<_LocaleNotifier, String>((ref) {
+  return _LocaleNotifier();
+});
+
 // ---------------------------------------------------------------------------
 // Month selector — drives all monthly expense queries
 // ---------------------------------------------------------------------------
@@ -106,6 +149,7 @@ final dashboardProvider =
   final repository = ref.watch(budgetRepositoryProvider);
   final database = ref.watch(databaseProvider);
   await database.seedCategories();
+  await repository.processDueRecurringRules(DateTime.now());
   return repository.dashboardSummaries(DateTime.now());
 });
 
@@ -222,7 +266,7 @@ final specialPurchasesProvider =
   final repository = ref.watch(budgetRepositoryProvider);
   final database = ref.watch(databaseProvider);
   await database.seedCategories();
-  return repository.specialPurchases(DateTime.now());
+  return repository.specialPurchases();
 });
 final specialSearchProvider = StateProvider.autoDispose<String>((ref) => '');
 
@@ -232,11 +276,11 @@ final specialSummaryProvider =
   return summaries.firstWhere((summary) => summary.category.type == 'special');
 });
 
-final tripsProvider = FutureProvider.autoDispose<List<Trip>>((ref) async {
+final tripsProvider = FutureProvider.autoDispose<List<TripProgress>>((ref) async {
   final repository = ref.watch(budgetRepositoryProvider);
   final database = ref.watch(databaseProvider);
   await database.seedCategories();
-  return repository.trips();
+  return repository.tripsWithProgress();
 });
 
 final travelExpensesProvider = FutureProvider.autoDispose
@@ -297,15 +341,7 @@ final recurringRulesProvider =
   final database = ref.watch(databaseProvider);
   await database.seedCategories();
   await repository.processDueRecurringRules(DateTime.now());
-  return repository.recurringRules();
-});
-
-final sixMonthTrendProvider =
-    FutureProvider.autoDispose<List<TrendPoint>>((ref) async {
-  final repository = ref.watch(budgetRepositoryProvider);
-  final database = ref.watch(databaseProvider);
-  await database.seedCategories();
-  return repository.sixMonthTrend(DateTime.now());
+  return repository.recurringRules(activeOnly: false);
 });
 
 // ---------------------------------------------------------------------------

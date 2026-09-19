@@ -2,6 +2,16 @@ import 'package:drift/drift.dart';
 
 import '../local/database.dart';
 
+int fundedAmount(String? notes, {required int targetMinor, required bool completed}) {
+  final match = RegExp(r'saved:(\d+)').firstMatch(notes ?? '');
+  if (match != null) {
+    return int.tryParse(match.group(1)!) ?? 0;
+  }
+  return completed ? targetMinor : 0;
+}
+
+String writeFundedAmount(int savedMinor) => 'saved:$savedMinor';
+
 class CategorySummary {
   const CategorySummary({
     required this.category,
@@ -30,6 +40,20 @@ class BudgetAlert {
   final int percentUsed;
 }
 
+class TripProgress {
+  const TripProgress({
+    required this.trip,
+    required this.budgetMinor,
+    required this.spentMinor,
+  });
+
+  final Trip trip;
+  final int budgetMinor;
+  final int spentMinor;
+
+  int get remainingMinor => budgetMinor - spentMinor;
+}
+
 class BudgetRepository {
   BudgetRepository(this.database);
 
@@ -47,6 +71,33 @@ class BudgetRepository {
     final summaries = <CategorySummary>[];
 
     for (final category in allCategories) {
+      if (category.type == 'special' || category.type == 'savings') {
+        final items = await (database.select(database.budgetTransactions)
+              ..where((t) => t.categoryId.equals(category.id)))
+            .get();
+        var target = 0;
+        var funded = 0;
+        for (final item in items) {
+          target += item.convertedAmountMinor;
+          final savedOrig = fundedAmount(
+            item.notes,
+            targetMinor: item.amountMinor,
+            completed: item.isPurchased,
+          );
+          funded += convertToTndMinor(
+            savedOrig,
+            item.currency,
+            item.exchangeRate,
+          );
+        }
+        summaries.add(CategorySummary(
+          category: category,
+          budgetMinor: target == 0 ? null : target,
+          spentMinor: funded,
+        ));
+        continue;
+      }
+
       final budgetRows = await (database.select(database.budgets)
             ..where((budget) =>
                 budget.categoryId.equals(category.id) &
@@ -269,15 +320,10 @@ class BudgetRepository {
     return rows.first;
   }
 
-  Future<List<BudgetTransaction>> specialPurchases(DateTime period) async {
+  Future<List<BudgetTransaction>> specialPurchases() async {
     final category = await _category('special');
     return (database.select(database.budgetTransactions)
-          ..where((item) =>
-              item.categoryId.equals(category.id) &
-              item.date.isBetweenValues(
-                DateTime(period.year, period.month),
-                DateTime(period.year, period.month + 1),
-              ))
+          ..where((item) => item.categoryId.equals(category.id))
           ..orderBy([(item) => OrderingTerm.desc(item.date)]))
         .get();
   }
@@ -286,7 +332,6 @@ class BudgetRepository {
     required String title,
     required int amountMinor,
     required String currency,
-    required bool purchased,
   }) async {
     final category = await _category('special');
     final rate = await exchangeRate(currency);
@@ -299,10 +344,32 @@ class BudgetRepository {
             convertedAmountMinor:
                 convertToTndMinor(amountMinor, currency, rate),
             exchangeRate: Value(rate),
-            isPurchased: Value(purchased),
+            isPurchased: const Value(false),
+            notes: Value(writeFundedAmount(0)),
             date: DateTime.now(),
           ),
         );
+  }
+
+  Future<void> contributeToSpecialPurchase({
+    required BudgetTransaction item,
+    required int addMinor,
+  }) async {
+    final already = fundedAmount(
+      item.notes,
+      targetMinor: item.amountMinor,
+      completed: item.isPurchased,
+    );
+    final next = already + addMinor;
+    final done = next >= item.amountMinor;
+    await (database.update(database.budgetTransactions)
+          ..where((transaction) => transaction.id.equals(item.id)))
+        .write(
+      BudgetTransactionsCompanion(
+        notes: Value(writeFundedAmount(next)),
+        isPurchased: Value(done),
+      ),
+    );
   }
 
   Future<void> toggleSpecialPurchase(BudgetTransaction item) async {
@@ -317,6 +384,26 @@ class BudgetRepository {
     return (database.select(database.trips)
           ..orderBy([(trip) => OrderingTerm.desc(trip.startDate)]))
         .get();
+  }
+
+  Future<List<TripProgress>> tripsWithProgress() async {
+    final allTrips = await trips();
+    final result = <TripProgress>[];
+    for (final trip in allTrips) {
+      final budgetRows = await (database.select(database.budgets)
+            ..where((budget) => budget.id.equals(trip.budgetId))
+            ..limit(1))
+          .get();
+      final expenses = await travelExpenses(trip.id);
+      final spent = expenses.fold<int>(
+          0, (sum, item) => sum + item.convertedAmountMinor);
+      result.add(TripProgress(
+        trip: trip,
+        budgetMinor: budgetRows.isEmpty ? 0 : budgetRows.first.amountMinor,
+        spentMinor: spent,
+      ));
+    }
+    return result;
   }
 
   Future<void> addTrip({
@@ -352,7 +439,6 @@ class BudgetRepository {
     required String title,
     required int amountMinor,
     required String currency,
-    required bool purchased,
   }) async {
     final rate = await exchangeRate(currency);
     await (database.update(database.budgetTransactions)
@@ -365,7 +451,6 @@ class BudgetRepository {
         convertedAmountMinor:
             Value(convertToTndMinor(amountMinor, currency, rate)),
         exchangeRate: Value(rate),
-        isPurchased: Value(purchased),
       ),
     );
   }
@@ -480,20 +565,24 @@ class BudgetRepository {
 
   Future<CategorySummary> savingsSummary() async {
     final category = await _category('savings');
-    final goals = await (database.select(database.budgets)
-          ..where((budget) => budget.categoryId.equals(category.id))
-          ..orderBy([(budget) => OrderingTerm.desc(budget.id)]))
-        .get();
     final records = await (database.select(database.budgetTransactions)
           ..where((item) => item.categoryId.equals(category.id)))
         .get();
+    var target = 0;
+    var funded = 0;
+    for (final item in records) {
+      target += item.convertedAmountMinor;
+      final savedOrig = fundedAmount(
+        item.notes,
+        targetMinor: item.amountMinor,
+        completed: item.isPurchased,
+      );
+      funded += convertToTndMinor(savedOrig, item.currency, item.exchangeRate);
+    }
     return CategorySummary(
       category: category,
-      budgetMinor: goals.isEmpty ? null : goals.first.amountMinor,
-      spentMinor: records.fold(
-        0,
-        (total, record) => total + record.convertedAmountMinor,
-      ),
+      budgetMinor: target == 0 ? null : target,
+      spentMinor: funded,
     );
   }
 
@@ -505,25 +594,60 @@ class BudgetRepository {
         .get();
   }
 
-  Future<void> addSaving(int amountMinor, {required String currency}) async {
+  Future<void> addSavingGoal({
+    required String title,
+    required int amountMinor,
+    required String currency,
+  }) async {
     final category = await _category('savings');
     final rate = await exchangeRate(currency);
     await database.into(database.budgetTransactions).insert(
           BudgetTransactionsCompanion.insert(
             categoryId: category.id,
-            title: 'Saving',
+            title: title,
             amountMinor: amountMinor,
             currency: Value(currency),
             convertedAmountMinor:
                 convertToTndMinor(amountMinor, currency, rate),
             exchangeRate: Value(rate),
+            notes: Value(writeFundedAmount(0)),
             date: DateTime.now(),
           ),
         );
   }
 
+  Future<void> contributeToSaving({
+    required BudgetTransaction item,
+    required int addMinor,
+  }) async {
+    final already = fundedAmount(
+      item.notes,
+      targetMinor: item.amountMinor,
+      completed: item.isPurchased,
+    );
+    final next = already + addMinor;
+    final done = next >= item.amountMinor;
+    await (database.update(database.budgetTransactions)
+          ..where((transaction) => transaction.id.equals(item.id)))
+        .write(
+      BudgetTransactionsCompanion(
+        notes: Value(writeFundedAmount(next)),
+        isPurchased: Value(done),
+      ),
+    );
+  }
+
+  Future<void> addSaving(int amountMinor, {required String currency}) async {
+    await addSavingGoal(
+      title: 'Saving',
+      amountMinor: amountMinor,
+      currency: currency,
+    );
+  }
+
   Future<void> updateSaving({
     required int id,
+    required String title,
     required int amountMinor,
     required String currency,
   }) async {
@@ -532,6 +656,7 @@ class BudgetRepository {
           ..where((item) => item.id.equals(id)))
         .write(
       BudgetTransactionsCompanion(
+        title: Value(title),
         amountMinor: Value(amountMinor),
         currency: Value(currency),
         convertedAmountMinor:
@@ -580,6 +705,27 @@ class BudgetRepository {
             notes: Value(notes),
           ),
         );
+  }
+
+  Future<void> payDebt({
+    required Debt debt,
+    required int payMinor,
+  }) async {
+    final remaining = debt.amountMinor - payMinor;
+    if (remaining <= 0) {
+      await settleDebt(debt.id);
+      return;
+    }
+    final rate = await exchangeRate(debt.currency);
+    await (database.update(database.debts)..where((d) => d.id.equals(debt.id)))
+        .write(
+      DebtsCompanion(
+        amountMinor: Value(remaining),
+        convertedAmountMinor: Value(
+          convertToTndMinor(remaining, debt.currency, rate),
+        ),
+      ),
+    );
   }
 
   Future<void> settleDebt(int id) async {
@@ -635,11 +781,25 @@ class BudgetRepository {
     return (amountMinor * rate * 10).round();
   }
 
-  Future<List<RecurringRule>> recurringRules() {
-    return (database.select(database.recurringRules)
-          ..where((rule) => rule.active.equals(true))
-          ..orderBy([(rule) => OrderingTerm.asc(rule.nextDueDate)]))
-        .get();
+  Future<List<RecurringRule>> recurringRules({bool activeOnly = true}) {
+    final query = database.select(database.recurringRules);
+    if (activeOnly) {
+      query.where((rule) => rule.active.equals(true));
+    }
+    query.orderBy([(rule) => OrderingTerm.asc(rule.nextDueDate)]);
+    return query.get();
+  }
+
+  Future<void> deleteRecurringRule(int id) {
+    return (database.delete(database.recurringRules)
+          ..where((rule) => rule.id.equals(id)))
+        .go();
+  }
+
+  Future<void> setRecurringRuleActive(int id, bool active) async {
+    await (database.update(database.recurringRules)
+          ..where((rule) => rule.id.equals(id)))
+        .write(RecurringRulesCompanion(active: Value(active)));
   }
 
   Future<void> addRecurringRule({

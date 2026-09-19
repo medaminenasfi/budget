@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 
+import '../core/persist_avatar_web.dart'
+    if (dart.library.io) '../core/persist_avatar_io.dart';
+import '../core/user_avatar.dart';
 import '../data/local/database.dart';
 import '../data/models/default_categories.dart';
 import '../logic/budget_providers.dart';
 import 'auth_screens.dart';
+import 'phase_five_screens.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -89,6 +94,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
     if (confirmed != true) return;
 
+    await ref.read(googleAuthRepositoryProvider).signOut();
     await ref.read(localAuthRepositoryProvider).logout();
     ref.read(currentUserProvider.notifier).state = null;
     if (!mounted) return;
@@ -98,12 +104,84 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
+  Future<void> _pickAvatar() async {
+    final user = ref.read(currentUserProvider);
+    if (user == null) return;
+    final picked = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 75,
+    );
+    if (picked == null) return;
+    final stored = await persistAvatar(picked.path, user.id);
+    await ref.read(settingsRepositoryProvider).updateAvatarPath(user.id, stored);
+    final updated =
+        await ref.read(settingsRepositoryProvider).getProfileById(user.id);
+    if (!mounted) return;
+    ref.read(currentUserProvider.notifier).state = updated;
+  }
+
+  Future<void> _changePassword() async {
+    final user = ref.read(currentUserProvider);
+    if (user == null) return;
+    if (user.isGoogleAccount) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Google accounts sign in with Google, not a password.')),
+      );
+      return;
+    }
+    final currentCtrl = TextEditingController();
+    final nextCtrl = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Change password'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: currentCtrl,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: 'Current password'),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: nextCtrl,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: 'New password'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Save')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final error = await ref.read(localAuthRepositoryProvider).changePassword(
+          userId: user.id,
+          currentPassword: currentCtrl.text,
+          newPassword: nextCtrl.text,
+        );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(error ?? 'Password updated')),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final user = ref.watch(currentUserProvider);
     final currency = ref.watch(appCurrencyProvider);
     final biometricAsync = ref.watch(biometricAvailableProvider);
+    final biometricEnabled = ref.watch(biometricEnabledProvider);
+    final localeCode = ref.watch(appLocaleProvider);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF7F5F0),
@@ -190,6 +268,65 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
           ),
 
+          _sectionHeader(context, 'Language', Icons.language),
+          Card(
+            elevation: 0,
+            color: Colors.white,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              child: DropdownButtonFormField<String>(
+                value: localeCode,
+                decoration: InputDecoration(
+                  prefixIcon: const Icon(Icons.translate),
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                  filled: true,
+                  fillColor: const Color(0xFFF7F5F0),
+                ),
+                items: const [
+                  DropdownMenuItem(value: 'en', child: Text('English')),
+                  DropdownMenuItem(value: 'fr', child: Text('Français')),
+                  DropdownMenuItem(value: 'ar', child: Text('العربية')),
+                ],
+                onChanged: (v) async {
+                  if (v == null) return;
+                  await ref.read(appLocaleProvider.notifier).setLocale(v);
+                },
+              ),
+            ),
+          ),
+
+          _sectionHeader(context, 'More', Icons.tune),
+          Card(
+            elevation: 0,
+            color: Colors.white,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            child: Column(
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.repeat),
+                  title: const Text('Recurring expenses'),
+                  subtitle: const Text(
+                      'Subscriptions and bills that repeat automatically'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                        builder: (_) => const RecurringRulesScreen()),
+                  ),
+                ),
+                const Divider(height: 1, indent: 16, endIndent: 16),
+                ListTile(
+                  leading: const Icon(Icons.lock_reset),
+                  title: const Text('Change password'),
+                  onTap: _changePassword,
+                ),
+              ],
+            ),
+          ),
+
           // ----------------------------------------------------------------
           // Security section
           // ----------------------------------------------------------------
@@ -214,37 +351,45 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             color: Colors.black26, size: 20),
                       );
                     }
-                    return FutureBuilder<bool>(
-                      future: ref
-                          .read(settingsRepositoryProvider)
-                          .isBiometricEnabled(),
-                      builder: (context, snap) {
-                        final enabled = snap.data ?? false;
-                        return SwitchListTile(
-                          secondary: Icon(Icons.fingerprint,
-                              color: theme.colorScheme.primary),
-                          title: const Text('Biometric Login'),
-                          subtitle: Text(enabled
-                              ? 'Face ID / Fingerprint enabled'
-                              : 'Use fingerprint or face to log in'),
-                          value: enabled,
-                          onChanged: (val) async {
-                            final settings =
-                                ref.read(settingsRepositoryProvider);
-                            if (val) {
-                              // Ask biometric to confirm enable
-                              final ok = await ref
-                                  .read(biometricRepositoryProvider)
-                                  .authenticate();
-                              if (ok) {
-                                await settings.setBiometricEnabled(true);
-                              }
-                            } else {
-                              await settings.setBiometricEnabled(false);
-                            }
-                            setState(() {}); // rebuild FutureBuilder
-                          },
-                        );
+                    return SwitchListTile(
+                      thumbColor: WidgetStateProperty.resolveWith((states) {
+                        if (states.contains(WidgetState.selected)) {
+                          return theme.colorScheme.primary;
+                        }
+                        return Colors.white;
+                      }),
+                      trackColor: WidgetStateProperty.resolveWith((states) {
+                        if (states.contains(WidgetState.selected)) {
+                          return theme.colorScheme.primary.withOpacity(0.45);
+                        }
+                        return Colors.black26;
+                      }),
+                      trackOutlineColor:
+                          const WidgetStatePropertyAll(Colors.transparent),
+                      secondary: Icon(Icons.fingerprint,
+                          color: biometricEnabled
+                              ? theme.colorScheme.primary
+                              : Colors.black45),
+                      title: const Text('Biometric Login'),
+                      subtitle: Text(biometricEnabled
+                          ? 'Face ID / Fingerprint enabled'
+                          : 'Use fingerprint or face to log in'),
+                      value: biometricEnabled,
+                      onChanged: (val) async {
+                        if (val) {
+                          final ok = await ref
+                              .read(biometricRepositoryProvider)
+                              .authenticate();
+                          if (ok) {
+                            await ref
+                                .read(biometricEnabledProvider.notifier)
+                                .setEnabled(true);
+                          }
+                        } else {
+                          await ref
+                              .read(biometricEnabledProvider.notifier)
+                              .setEnabled(false);
+                        }
                       },
                     );
                   },
@@ -310,16 +455,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       children: [
         Row(
           children: [
-            CircleAvatar(
-              radius: 32,
-              backgroundColor:
-                  theme.colorScheme.primary.withOpacity(0.12),
-              child: Text(
-                user.name.isNotEmpty ? user.name[0].toUpperCase() : '?',
-                style: TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.w700,
-                    color: theme.colorScheme.primary),
+            InkWell(
+              onTap: _pickAvatar,
+              child: UserAvatar(
+                name: user.name,
+                path: user.avatarPath,
+                radius: 32,
               ),
             ),
             const SizedBox(width: 16),
@@ -365,7 +506,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
           ],
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
+        TextButton.icon(
+          onPressed: _pickAvatar,
+          icon: const Icon(Icons.photo_camera_outlined, size: 18),
+          label: const Text('Change photo'),
+        ),
+        const SizedBox(height: 4),
         OutlinedButton.icon(
           onPressed: () => setState(() => _editingProfile = true),
           icon: const Icon(Icons.edit_outlined, size: 18),

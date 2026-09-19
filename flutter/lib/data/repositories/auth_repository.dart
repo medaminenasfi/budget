@@ -1,11 +1,13 @@
 import 'dart:convert';
 import 'package:drift/drift.dart';
+import 'package:flutter/foundation.dart';
 
 import 'package:crypto/crypto.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:local_auth/local_auth.dart';
 
 import '../local/database.dart';
+import '../../core/google_config.dart';
 import 'settings_repository.dart';
 
 /// Hashes a plain-text password with SHA-256.
@@ -72,12 +74,38 @@ class LocalAuthRepository {
   /// Signs out the current user.
   Future<void> logout() async {
     await _settings.clearSession();
-    await _settings.setBiometricEnabled(false);
   }
 
   /// Checks for an existing valid session.
   Future<UserProfile?> restoreSession() async {
     return _settings.getProfile();
+  }
+
+  Future<String?> changePassword({
+    required int userId,
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    if (newPassword.length < 6) {
+      return 'Password must be at least 6 characters.';
+    }
+    final rows = await (_db.select(_db.userProfiles)
+          ..where((p) => p.id.equals(userId))
+          ..limit(1))
+        .get();
+    if (rows.isEmpty) return 'Account not found.';
+    final profile = rows.first;
+    if (profile.isGoogleAccount || profile.passwordHash == null) {
+      return 'Google accounts use Google to sign in. Password cannot be changed here.';
+    }
+    if (profile.passwordHash != _hashPassword(currentPassword)) {
+      return 'Current password is incorrect.';
+    }
+    await (_db.update(_db.userProfiles)..where((p) => p.id.equals(userId)))
+        .write(UserProfilesCompanion(
+      passwordHash: Value(_hashPassword(newPassword)),
+    ));
+    return null;
   }
 }
 
@@ -89,17 +117,37 @@ class GoogleAuthRepository {
   final AppDatabase _db;
   final SettingsRepository _settings;
 
-  static final _googleSignIn = GoogleSignIn(scopes: ['email', 'profile']);
+  static String get _webClientId {
+    const fromEnv = String.fromEnvironment('GOOGLE_CLIENT_ID');
+    if (fromEnv.isNotEmpty) return fromEnv;
+    return kGoogleWebClientId;
+  }
 
-  /// Initiates Google Sign-In. Returns null if cancelled / unavailable.
+  static final _googleSignIn = GoogleSignIn(
+    scopes: ['email', 'profile'],
+    clientId: kIsWeb ? _webClientId : null,
+  );
+
+  /// Initiates Google Sign-In. Returns null if the user cancelled.
+  /// Throws [GoogleSignInFailure] when configuration or the Google SDK fails.
   Future<UserProfile?> signInWithGoogle() async {
+    if (kIsWeb && _webClientId.isEmpty) {
+      throw GoogleSignInFailure(
+        'Google on Chrome needs a Web client ID. '
+        'Paste it in flutter/lib/core/google_config.dart '
+        '(see comments in that file). Email/password works without it. '
+        'On a phone, Google does not use this key.',
+      );
+    }
     try {
-      final account = await _googleSignIn.signIn();
+      GoogleSignInAccount? account = _googleSignIn.currentUser;
+      account ??= await _googleSignIn.signInSilently();
+      account ??= await _googleSignIn.signIn();
       if (account == null) return null;
 
-      // Check if user already exists
+      final signedIn = account;
       final existing = await (_db.select(_db.userProfiles)
-            ..where((p) => p.googleId.equals(account.id))
+            ..where((p) => p.googleId.equals(signedIn.id))
             ..limit(1))
           .get();
 
@@ -108,32 +156,30 @@ class GoogleAuthRepository {
         return existing.first;
       }
 
-      // Check by email
       final byEmail = await (_db.select(_db.userProfiles)
             ..where(
-                (p) => p.email.equals(account.email.toLowerCase().trim()))
+                (p) => p.email.equals(signedIn.email.toLowerCase().trim()))
             ..limit(1))
           .get();
 
       if (byEmail.isNotEmpty) {
-        // Link Google account to existing local account
         await (_db.update(_db.userProfiles)
               ..where((p) => p.id.equals(byEmail.first.id)))
             .write(UserProfilesCompanion(
-          googleId: Value(account.id),
+          googleId: Value(signedIn.id),
           isGoogleAccount: const Value(true),
         ));
         await _settings.saveSession(byEmail.first.id);
         return byEmail.first;
       }
 
-      // New Google user — create profile
       final id = await _db.into(_db.userProfiles).insert(
             UserProfilesCompanion.insert(
-              name: account.displayName ?? account.email.split('@').first,
-              email: account.email.toLowerCase().trim(),
+              name: signedIn.displayName ?? signedIn.email.split('@').first,
+              email: signedIn.email.toLowerCase().trim(),
+              avatarPath: Value(signedIn.photoUrl),
               isGoogleAccount: const Value(true),
-              googleId: Value(account.id),
+              googleId: Value(signedIn.id),
               createdAt: DateTime.now(),
             ),
           );
@@ -141,7 +187,18 @@ class GoogleAuthRepository {
       await _settings.setOnboardingDone();
       return await _settings.getProfileById(id);
     } catch (e) {
-      return null;
+      final text = e.toString().toLowerCase();
+      if (text.contains('12501') ||
+          text.contains('sign_in_canceled') ||
+          text.contains('sign_in_cancelled') ||
+          text.contains('canceled')) {
+        return null;
+      }
+      throw GoogleSignInFailure(
+        'Google Sign-In failed. Check that a Google account is available '
+        'on this device and that the app SHA-1 / package name is registered '
+        'in Google Cloud. ($e)',
+      );
     }
   }
 
@@ -149,8 +206,15 @@ class GoogleAuthRepository {
     try {
       await _googleSignIn.signOut();
     } catch (_) {}
-    await _settings.clearSession();
   }
+}
+
+class GoogleSignInFailure implements Exception {
+  GoogleSignInFailure(this.message);
+  final String message;
+
+  @override
+  String toString() => message;
 }
 
 /// Wraps local_auth for biometric authentication.
@@ -158,10 +222,11 @@ class BiometricRepository {
   static final _auth = LocalAuthentication();
 
   Future<bool> isAvailable() async {
+    if (kIsWeb) return false;
     try {
       final canCheck = await _auth.canCheckBiometrics;
       final isDeviceSupported = await _auth.isDeviceSupported();
-      return canCheck && isDeviceSupported;
+      return canCheck || isDeviceSupported;
     } catch (_) {
       return false;
     }
@@ -177,12 +242,15 @@ class BiometricRepository {
 
   /// Returns true if biometric auth succeeded.
   Future<bool> authenticate() async {
+    if (kIsWeb) return false;
     try {
       return await _auth.authenticate(
         localizedReason: 'Authenticate to access your budget',
         options: const AuthenticationOptions(
           biometricOnly: false,
           stickyAuth: true,
+          useErrorDialogs: true,
+          sensitiveTransaction: true,
         ),
       );
     } catch (_) {

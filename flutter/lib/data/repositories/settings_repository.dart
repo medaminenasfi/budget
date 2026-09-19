@@ -100,6 +100,18 @@ class SettingsRepository {
     return rows.isEmpty ? null : rows.first;
   }
 
+  static const _localeKey = 'app_locale';
+
+  Future<String> getLocaleCode() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_localeKey) ?? 'en';
+  }
+
+  Future<void> setLocaleCode(String code) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_localeKey, code);
+  }
+
   Future<void> updateProfile({
     required int id,
     required String name,
@@ -115,5 +127,11 @@ class SettingsRepository {
     if (currency != null && kSupportedCurrencies.contains(currency)) {
       await setCurrency(currency);
     }
+  }
+
+  Future<void> updateAvatarPath(int id, String? path) async {
+    await (_db.update(_db.userProfiles)..where((p) => p.id.equals(id))).write(
+      UserProfilesCompanion(avatarPath: Value(path)),
+    );
   }
 }

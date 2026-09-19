@@ -34,7 +34,7 @@ class DebtTrackerScreen extends ConsumerWidget {
             _DebtTotals(items: items),
             const SizedBox(height: 18),
             if (items.isEmpty)
-              const Center(child: Text('No active debts.'))
+              const Center(child: Text('No active debts. Add who you owe or who owes you.'))
             else
               ...items.map(
                 (debt) => Dismissible(
@@ -71,22 +71,44 @@ class DebtTrackerScreen extends ConsumerWidget {
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
                           Text(formatDebtAmount(debt)),
-                          TextButton(
-                            onPressed: () async {
-                              await ref
-                                  .read(budgetRepositoryProvider)
-                                  .settleDebt(debt.id);
-                              ref.invalidate(debtsProvider);
-                              ref.invalidate(settledDebtsProvider);
-                            },
-                            child: const Text('Settle'),
+                          Text(
+                            'Remaining',
+                            style: TextStyle(
+                                color: Colors.black45, fontSize: 11),
                           ),
                         ],
+                      ),
+                      onTap: () => showDialog<void>(
+                        context: context,
+                        builder: (_) => PayDebtDialog(debt: debt),
                       ),
                     ),
                   ),
                 ),
               ),
+            const SizedBox(height: 24),
+            const Text('Settled',
+                style: TextStyle(fontWeight: FontWeight.w700)),
+            const SizedBox(height: 8),
+            Consumer(builder: (context, ref, _) {
+              final settled = ref.watch(settledDebtsProvider);
+              return settled.when(
+                loading: () => const SizedBox.shrink(),
+                error: (_, __) => const SizedBox.shrink(),
+                data: (done) => done.isEmpty
+                    ? const Text('No settled debts yet.',
+                        style: TextStyle(color: Colors.black45))
+                    : Column(
+                        children: done
+                            .map((debt) => ListTile(
+                                  title: Text(debt.personName),
+                                  subtitle: const Text('Settled'),
+                                  trailing: Text(formatDebtAmount(debt)),
+                                ))
+                            .toList(),
+                      ),
+              );
+            }),
           ],
         ),
       ),
@@ -334,4 +356,74 @@ String formatDebtAmount(Debt debt) {
 
 String debtShortDate(DateTime date) {
   return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+}
+
+class PayDebtDialog extends ConsumerStatefulWidget {
+  const PayDebtDialog({required this.debt, super.key});
+
+  final Debt debt;
+
+  @override
+  ConsumerState<PayDebtDialog> createState() => _PayDebtDialogState();
+}
+
+class _PayDebtDialogState extends ConsumerState<PayDebtDialog> {
+  final amountController = TextEditingController();
+
+  @override
+  void dispose() {
+    amountController.dispose();
+    super.dispose();
+  }
+
+  Future<void> save() async {
+    final amount =
+        parseCurrencyMinor(amountController.text, widget.debt.currency);
+    if (amount == null || amount <= 0) return;
+    await ref.read(budgetRepositoryProvider).payDebt(
+          debt: widget.debt,
+          payMinor: amount,
+        );
+    ref.invalidate(debtsProvider);
+    ref.invalidate(settledDebtsProvider);
+    ref.invalidate(dashboardProvider);
+    if (mounted) Navigator.of(context).pop();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text('Pay ${widget.debt.personName}'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Remaining ${formatDebtAmount(widget.debt)}'),
+          const SizedBox(height: 12),
+          TextField(
+            controller: amountController,
+            decoration: InputDecoration(
+                labelText: 'Payment (${widget.debt.currency})'),
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          onPressed: () async {
+            await ref.read(budgetRepositoryProvider).settleDebt(widget.debt.id);
+            ref.invalidate(debtsProvider);
+            ref.invalidate(settledDebtsProvider);
+            if (mounted) Navigator.of(context).pop();
+          },
+          child: const Text('Settle all'),
+        ),
+        FilledButton(onPressed: save, child: const Text('Pay')),
+      ],
+    );
+  }
 }

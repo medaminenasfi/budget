@@ -30,12 +30,23 @@ class RecurringRulesScreen extends ConsumerWidget {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, _) =>
             Center(child: Text('Could not load recurring rules: $error')),
-        data: (items) => items.isEmpty
-            ? const Center(child: Text('No recurring expenses configured.'))
-            : ListView(
+        data: (items) => ListView(
                 padding: const EdgeInsets.all(16),
-                children: items
-                    .map(
+                children: [
+                  const Text(
+                    'Recurring expenses are bills or subscriptions (rent, Netflix). '
+                    'When the due date arrives, the app adds them to Monthly Expenses automatically.',
+                    style: TextStyle(color: Colors.black54),
+                  ),
+                  const SizedBox(height: 16),
+                  if (items.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 40),
+                      child: Center(
+                          child: Text('None yet. Tap + to add rent, bills, or subscriptions.')),
+                    )
+                  else
+                    ...items.map(
                       (rule) => Card(
                         elevation: 0,
                         child: ListTile(
@@ -43,22 +54,42 @@ class RecurringRulesScreen extends ConsumerWidget {
                               const CircleAvatar(child: Icon(Icons.repeat)),
                           title: Text(rule.title),
                           subtitle: Text(
-                            '${rule.frequency} · Next ${phaseFiveShortDate(rule.nextDueDate)}',
+                            '${rule.frequency} · Next ${phaseFiveShortDate(rule.nextDueDate)}\n'
+                            '${rule.active ? 'Active — auto-adds on due date' : 'Paused'}',
                           ),
-                          trailing: Consumer(builder: (context, ref, _) {
-                            final curr = ref.watch(appCurrencyProvider);
-                            return Text(formatAmount(rule.amountMinor, curr));
-                          }),
-                          onLongPress: () async {
-                            await ref
-                                .read(budgetRepositoryProvider)
-                                .deactivateRecurringRule(rule.id);
-                            ref.invalidate(recurringRulesProvider);
-                          },
+                          isThreeLine: true,
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Consumer(builder: (context, ref, _) {
+                                final curr = ref.watch(appCurrencyProvider);
+                                return Text(formatAmount(rule.amountMinor, curr));
+                              }),
+                              Switch(
+                                value: rule.active,
+                                onChanged: (on) async {
+                                  await ref
+                                      .read(budgetRepositoryProvider)
+                                      .setRecurringRuleActive(rule.id, on);
+                                  ref.invalidate(recurringRulesProvider);
+                                },
+                              ),
+                              IconButton(
+                                tooltip: 'Delete',
+                                onPressed: () async {
+                                  await ref
+                                      .read(budgetRepositoryProvider)
+                                      .deleteRecurringRule(rule.id);
+                                  ref.invalidate(recurringRulesProvider);
+                                },
+                                icon: const Icon(Icons.delete_outline),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                    )
-                    .toList(),
+                    ),
+                ],
               ),
       ),
       floatingActionButton: FloatingActionButton(

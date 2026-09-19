@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
+
+import 'core/user_avatar.dart';
 
 import 'data/local/database.dart';
 import 'data/models/default_categories.dart';
@@ -9,11 +12,11 @@ import 'logic/budget_providers.dart';
 import 'presentation/phase_two_screens.dart';
 import 'presentation/phase_three_widgets.dart';
 import 'presentation/phase_four_screens.dart';
-import 'presentation/phase_five_screens.dart';
 import 'presentation/auth_screens.dart';
 import 'presentation/settings_screen.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const ProviderScope(child: SmartBudgetApp()));
 }
 
@@ -22,9 +25,21 @@ class SmartBudgetApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final localeCode = ref.watch(appLocaleProvider);
     return MaterialApp(
       title: 'Smart Budget Manager',
       debugShowCheckedModeBanner: false,
+      locale: Locale(localeCode),
+      supportedLocales: const [
+        Locale('en'),
+        Locale('fr'),
+        Locale('ar'),
+      ],
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
           seedColor: const Color(0xFF2F6690),
@@ -32,6 +47,21 @@ class SmartBudgetApp extends ConsumerWidget {
         ),
         scaffoldBackgroundColor: const Color(0xFFF7F5F0),
         useMaterial3: true,
+        switchTheme: SwitchThemeData(
+          thumbColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.selected)) {
+              return const Color(0xFF2F6690);
+            }
+            return Colors.white;
+          }),
+          trackColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.selected)) {
+              return const Color(0xFF2F6690).withOpacity(0.45);
+            }
+            return Colors.black26;
+          }),
+          trackOutlineColor: WidgetStateProperty.all(Colors.transparent),
+        ),
         inputDecorationTheme: InputDecorationTheme(
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
           filled: true,
@@ -84,7 +114,7 @@ class _AppStartup extends ConsumerWidget {
           await ref.read(biometricRepositoryProvider).isAvailable();
 
       if (biometricEnabled && biometricAvailable) {
-        // We'll try biometric on the login screen — return login with biometric hint
+        ref.read(currentUserProvider.notifier).state = null;
         return const LoginScreen();
       }
 
@@ -125,7 +155,6 @@ class HomeScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final dashboard = ref.watch(dashboardProvider);
-    final trend = ref.watch(sixMonthTrendProvider);
     final alerts = ref.watch(budgetAlertsProvider);
     final currency = ref.watch(appCurrencyProvider);
 
@@ -134,23 +163,18 @@ class HomeScreen extends ConsumerWidget {
         title: const Text('Smart Budget'),
         actions: [
           IconButton(
-            tooltip: 'Recurring expenses',
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const RecurringRulesScreen()),
-            ),
-            icon: const Icon(Icons.repeat),
-          ),
-          IconButton(
-            tooltip: 'Settings',
+            tooltip: 'Account & settings',
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const SettingsScreen()),
             ),
-            icon: const Icon(Icons.settings_outlined),
-          ),
-          IconButton(
-            tooltip: 'Refresh',
-            onPressed: () => ref.invalidate(dashboardProvider),
-            icon: const Icon(Icons.refresh),
+            icon: Consumer(builder: (context, ref, _) {
+              final user = ref.watch(currentUserProvider);
+              return UserAvatar(
+                name: user?.name ?? '?',
+                path: user?.avatarPath,
+                radius: 16,
+              );
+            }),
           ),
         ],
       ),
@@ -203,12 +227,6 @@ class HomeScreen extends ConsumerWidget {
                         ),
                       ),
               ),
-              const SizedBox(height: 8),
-              trend.when(
-                loading: () => const SizedBox.shrink(),
-                error: (_, __) => const SizedBox.shrink(),
-                data: (points) => SixMonthTrendChart(points: points),
-              ),
             ],
           ),
         ),
@@ -257,10 +275,19 @@ class _SummaryCard extends ConsumerWidget {
                     Text(summary.category.name,
                         style: const TextStyle(fontWeight: FontWeight.w700)),
                     const SizedBox(height: 8),
-                    Text('Spent ${formatAmount(summary.spentMinor, currency)}'),
+                    Text(
+                      summary.category.type == 'savings' ||
+                              summary.category.type == 'special'
+                          ? 'Funded ${formatAmount(summary.spentMinor, currency)}'
+                          : 'Spent ${formatAmount(summary.spentMinor, currency)}',
+                    ),
                     Text(
                       summary.budgetMinor == null
-                          ? 'No budget set'
+                          ? (summary.category.type == 'special'
+                              ? 'Add a purchase to start'
+                              : summary.category.type == 'savings'
+                                  ? 'Add a goal to start'
+                                  : 'No budget set')
                           : 'Remaining ${formatAmount(summary.remainingMinor, currency)}',
                       style: TextStyle(
                         color: summary.remainingMinor < 0
